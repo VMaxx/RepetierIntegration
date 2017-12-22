@@ -1,0 +1,8 @@
+{
+    "name": "Repetier connection",
+    "author": "fieldOfView",
+    "version": "3.0",
+    "description": "Enables sending prints to Repetier and monitoring the progress",
+    "api": 4,
+    "i18n-catalog": "cura"
+}
