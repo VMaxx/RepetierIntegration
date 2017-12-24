@@ -306,11 +306,11 @@ class RepetierOutputDevice(PrinterOutputDevice):
         self._manager.finished.connect(self._onRequestFinished)
 
     def _createApiRequest(self, end_point):
+        ##Logger.log("d", "Debug: %s", end_point)
         if "upload" in end_point:
             request = QNetworkRequest(QUrl(self._job_url + "?a=" + end_point))
         else:
             request = QNetworkRequest(QUrl(self._api_url + "?a=" + end_point))
-
         request.setRawHeader(self._user_agent_header, self._user_agent)
         request.setRawHeader(self._api_header, self._api_key)
         if self._basic_auth_data:
@@ -499,8 +499,17 @@ class RepetierOutputDevice(PrinterOutputDevice):
 
     def _sendJobCommand(self, command):
         #self._sendCommandToApi("job", command)
-        self._sendCommandToApi("send", "")
-        Logger.log("d", "Sent job command to Repetier instance: %s", command)
+        if (command=="pause"):
+            if (self.jobState=="paused"):
+                self._manager.get(self._createApiRequest("continueJob"))                
+                ##self._sendCommandToApi("send", "&data={\"cmd\":\"continueJob\"}")                
+            else:
+                self._sendCommandToApi("send", "&data={\"cmd\":\"@pause\"}")
+        if (command=="cancel"):            
+            self._manager.get(self._createApiRequest("stopJob"))            
+            ##self._sendCommandToApi("send", "&data={\"cmd\":\"stopJob\"}")
+            
+        Logger.log("d", "Sent job command to Repetier instance: %s %s" % (command,self.jobState))
 
     def _sendCommandToApi(self, end_point, command):
         command_request = self._createApiRequest(end_point)
