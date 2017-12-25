@@ -29,4 +29,3 @@ How to use
 Issues
 ----
 I only have one printer connected to my repetier server, so I didn't code it for more than one.
-Cancelling/Pausing print via the monitor screen doesn't work.
