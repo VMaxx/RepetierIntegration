@@ -330,7 +330,13 @@ class RepetierOutputDevice(PrinterOutputDevice):
 
     def requestWrite(self, node, file_name = None, filter_by_machine = False, file_handler = None, **kwargs):
         self.writeStarted.emit(self)
-        self._gcode = getattr(Application.getInstance().getController().getScene(), "gcode_list")
+
+        active_build_plate = Application.getInstance().getBuildPlateModel().activeBuildPlate
+        scene = Application.getInstance().getController().getScene()
+        gcode_dict = getattr(scene, "gcode_dict", None)
+        if not gcode_dict:
+            return
+        self._gcode = gcode_dict.get(active_build_plate, None)
 
         self.startPrint()
 

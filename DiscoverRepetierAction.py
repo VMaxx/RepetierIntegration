@@ -5,6 +5,7 @@ from UM.Application import Application
 
 from UM.Settings.ContainerRegistry import ContainerRegistry
 from cura.MachineAction import MachineAction
+from cura.Settings.CuraStackBuilder import CuraStackBuilder
 
 from PyQt5.QtCore import pyqtSignal, pyqtProperty, pyqtSlot, QUrl, QObject
 from PyQt5.QtQml import QQmlComponent, QQmlContext
@@ -57,6 +58,7 @@ class DiscoverRepetierAction(MachineAction):
         self._instance_api_key_accepted = False
         self._instance_supports_sd = False
         self._instance_supports_camera = False
+        self._additional_components = None
 
         ContainerRegistry.getInstance().containerAdded.connect(self._onContainerAdded)
         Application.getInstance().engineCreatedSignal.connect(self._createAdditionalComponentsView)
@@ -175,7 +177,7 @@ class DiscoverRepetierAction(MachineAction):
 
     @pyqtSlot(str, str, str)
     def setContainerMetaDataEntry(self, container_id, key, value):
-        containers = ContainerRegistry.getInstance().findContainers(None, id = container_id)
+        containers = ContainerRegistry.getInstance().findContainers(id = container_id)
         if not containers:
             UM.Logger.log("w", "Could not set metadata of container %s because it was not found.", container_id)
             return False
@@ -193,19 +195,14 @@ class DiscoverRepetierAction(MachineAction):
     def _createAdditionalComponentsView(self):
         Logger.log("d", "Creating additional ui components for Repetier-connected printers.")
 
-        path = QUrl.fromLocalFile(os.path.join(os.path.dirname(os.path.abspath(__file__)), "RepetierComponents.qml"))
-        self._additional_component = QQmlComponent(Application.getInstance()._engine, path)
-
-        # We need access to engine (although technically we can't)
-        self._additional_components_context = QQmlContext(Application.getInstance()._engine.rootContext())
-        self._additional_components_context.setContextProperty("manager", self)
-
-        self._additional_components_view = self._additional_component.create(self._additional_components_context)
-        if not self._additional_components_view:
-            Logger.log("w", "Could not create additional components for Repetier-connected printers.")
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "RepetierComponents.qml")
+        self._additional_components = Application.getInstance().createQmlComponent(path, {"manager": self})
+        if not self._additional_components:
+            Logger.log("w", "Could not create additional components for OctoPrint-connected printers.")
             return
 
-        Application.getInstance().addAdditionalComponent("monitorButtons", self._additional_components_view.findChild(QObject, "openRepetierButton"))
+        Application.getInstance().addAdditionalComponent("monitorButtons", self._additional_components.findChild(QObject, "openRepetierButton"))
+
 
     ##  Handler for all requests that have finished.
     def _onRequestFinished(self, reply):
