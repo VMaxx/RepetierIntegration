@@ -248,23 +248,21 @@ class DiscoverRepetierAction(MachineAction):
                 self.selectedInstanceSettingsChanged.emit()
 
     @pyqtSlot(str, str, str, str)
-    def testApiKey(self, base_url, api_key, basic_auth_username = "", basic_auth_password = ""):
+    def testApiKey(self, base_url, api_key, basic_auth_username = "", basic_auth_password = ""):        
         self._instance_responded = False
         self._instance_api_key_accepted = False
         self._instance_supports_sd = False
         self._instance_supports_camera = False
         self.selectedInstanceSettingsChanged.emit()
         global_container_stack = Application.getInstance().getGlobalContainerStack()
-        if global_container_stack:            
-            work_id= global_container_stack.getMetaDataEntry("repetier_id")
-        else:
-            work_id = ""
+        if global_container_stack:
+             work_id = global_container_stack.getId()
 
 
         if api_key != "":
             Logger.log("d", "Trying to access Repetier instance at %s with the provided API key." % base_url)
             Logger.log("d", "Using %s as work_id" % work_id)
-
+            Logger.log("d", "Using %s as api_key" % api_key)
             ## Request 'settings' dump
             url = QUrl(base_url + "printer/api/" + work_id + "?a=getPrinterConfig&apikey=" + api_key)			
             settings_request = QNetworkRequest(url)
