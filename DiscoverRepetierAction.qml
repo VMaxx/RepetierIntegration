@@ -69,7 +69,7 @@ Cura.MachineAction
             {
                 id: removeButton
                 text: catalog.i18nc("@action:button", "Remove")
-                enabled: base.selectedInstance != null && base.selectedInstance.getProperty("manual") == "true"
+                enabled: base.selectedInstance != null 
                 onClicked: manager.removeManualInstance(base.selectedInstance.name)
             }
 
@@ -232,7 +232,7 @@ Cura.MachineAction
                             }
                         }
                         onCheck:
-                        {
+                        {                            
                             manager.testApiKey(base.selectedInstance.baseURL, apiKey.text, base.selectedInstance.getProperty("userName"), base.selectedInstance.getProperty("password"))
                             checkOnTrigger = false;
                             restart();
