@@ -652,34 +652,40 @@ class RepetierOutputDevice(PrinterOutputDevice):
                         Logger.log("w", "Received invalid JSON from Repetier instance.")
                         json_data = {}
                     #if "temperature" in json_data:
-                    if "numExtruder" in json_data[self._key]:
-                        self._num_extruders = 0
-                        #while "tool%d" % self._num_extruders in json_data["temperature"]:
-                        #   self._num_extruders = self._num_extruders + 1
-                        self._num_extruders=json_data[self._key]["numExtruder"]
-			 
-                        # Reinitialise from PrinterOutputDevice to match the new _num_extruders
-                        self._hotend_temperatures = [0] * self._num_extruders
-                        self._target_hotend_temperatures = [0] * self._num_extruders
-                        self._num_extruders_set = True
-  
-                        # Check for hotend temperatures
-                        for index in range(0, self._num_extruders):
-                            if "extruder" in json_data[self._key]:							
-                                hotend_temperatures = json_data[self._key]["extruder"]								
-                                self._setHotendTemperature(index, hotend_temperatures[index]["tempRead"])
-                                self._updateTargetHotendTemperature(index, hotend_temperatures[index]["tempSet"])
-                            else:
-                                self._setHotendTemperature(index, 0)
-                                self._updateTargetHotendTemperature(index, 0)
+                    try:
+                        if "numExtruder" in json_data[self._key]:
+                            self._num_extruders = 0
+                            #while "tool%d" % self._num_extruders in json_data["temperature"]:
+                            #   self._num_extruders = self._num_extruders + 1
+                            self._num_extruders=json_data[self._key]["numExtruder"]
+                 
+                            # Reinitialise from PrinterOutputDevice to match the new _num_extruders
+                            self._hotend_temperatures = [0] * self._num_extruders
+                            self._target_hotend_temperatures = [0] * self._num_extruders
+                            self._num_extruders_set = True
+      
+                            # Check for hotend temperatures
+                            for index in range(0, self._num_extruders):
+                                if "extruder" in json_data[self._key]:                            
+                                    hotend_temperatures = json_data[self._key]["extruder"]                                
+                                    self._setHotendTemperature(index, hotend_temperatures[index]["tempRead"])
+                                    self._updateTargetHotendTemperature(index, hotend_temperatures[index]["tempSet"])
+                                else:
+                                    self._setHotendTemperature(index, 0)
+                                    self._updateTargetHotendTemperature(index, 0)
 
-                        if "heatedBed" in json_data[self._key]:
-                            bed_temperatures = json_data[self._key]["heatedBed"]
-                            self._setBedTemperature(bed_temperatures["tempRead"])
-                            self._updateTargetBedTemperature(bed_temperatures["tempSet"])
-                        else:
-                            self._setBedTemperature(0)
-                            self._updateTargetBedTemperature(0)
+                            if "heatedBed" in json_data[self._key]:
+                                bed_temperatures = json_data[self._key]["heatedBed"]
+                                self._setBedTemperature(bed_temperatures["tempRead"])
+                                self._updateTargetBedTemperature(bed_temperatures["tempSet"])
+                            else:
+                                self._setBedTemperature(0)
+                                self._updateTargetBedTemperature(0)
+                    except:
+                        Logger.log("w", "Received invalid JSON from Repetier instance.")					
+                        json_data = {}
+                        self._updateJobState("offline")
+                        self.setConnectionText(i18n_catalog.i18nc("@info:status", "Repetier on {0} configuration is invalid").format(self._key))
 
                 elif http_status_code == 401:
                     self._updateJobState("offline")
@@ -701,52 +707,56 @@ class RepetierOutputDevice(PrinterOutputDevice):
                     except json.decoder.JSONDecodeError:
                         Logger.log("w", "Received invalid JSON from Repetier instance.")
                         json_data = {}
+                    try:
                     
-                    job_state = "ready"
-                    if "job" in json_data[0]:
-                        if json_data[0]["job"] != "none":
-                            job_state = "printing"
+                        job_state = "ready"
+                        if "job" in json_data[0]:
+                            if json_data[0]["job"] != "none":
+                                job_state = "printing"
 
-                    if "paused" in json_data[0]:
-                        if json_data[0]["paused"] != False:
-                            job_state = "paused"
+                        if "paused" in json_data[0]:
+                            if json_data[0]["paused"] != False:
+                                job_state = "paused"
 
-				    #if "state" in json_data:
-                    #    if json_data["state"]["flags"]["error"]:
-                    #        job_state = "error"
-                    #    elif json_data["state"]["flags"]["paused"]:
-                    #        job_state = "paused"
-                    #    elif json_data["state"]["flags"]["printing"]:
-                    #        job_state = "printing"
-                    #    elif json_data["state"]["flags"]["ready"]:
-                    #        job_state = "ready"
-                    self._updateJobState(job_state)
-					
-                    #progress = json_data["progress"]["completion"]
-                    if "done" in json_data[0]:
-                        progress = json_data[0]["done"]
-                        if progress:
-                            self.setProgress(progress)
+                        #if "state" in json_data:
+                        #    if json_data["state"]["flags"]["error"]:
+                        #        job_state = "error"
+                        #    elif json_data["state"]["flags"]["paused"]:
+                        #        job_state = "paused"
+                        #    elif json_data["state"]["flags"]["printing"]:
+                        #        job_state = "printing"
+                        #    elif json_data["state"]["flags"]["ready"]:
+                        #        job_state = "ready"
+                        self._updateJobState(job_state)
+                        
+                        #progress = json_data["progress"]["completion"]
+                        if "done" in json_data[0]:
+                            progress = json_data[0]["done"]
+                            if progress:
+                                self.setProgress(progress)
 
-                    if "start" in json_data[0]:
-                        if json_data[0]["start"]:
-                            ##self.setTimeElapsed(json_data[0]["start"])
-                            ##self.setTimeElapsed(datetime.datetime.fromtimestamp(json_data[0]["start"]).strftime('%Y-%m-%d %H:%M:%S'))
-                            if json_data[0]["printedTimeComp"]:
-                                self.setTimeTotal(json_data[0]["start"] - json_data[0]["printedTimeComp"])                                
-                            if json_data[0]["printTime"]:
-                                self.setTimeElapsed(json_data[0]["start"] - json_data[0]["printTime"])                                
-                            elif progress > 0:
-                                self.setTimeTotal(json_data[0]["printTime"] / (progress / 100))
+                        if "start" in json_data[0]:
+                            if json_data[0]["start"]:
+                                ##self.setTimeElapsed(json_data[0]["start"])
+                                ##self.setTimeElapsed(datetime.datetime.fromtimestamp(json_data[0]["start"]).strftime('%Y-%m-%d %H:%M:%S'))
+                                if json_data[0]["printedTimeComp"]:
+                                    self.setTimeTotal(json_data[0]["start"] - json_data[0]["printedTimeComp"])                                
+                                if json_data[0]["printTime"]:
+                                    self.setTimeElapsed(json_data[0]["start"] - json_data[0]["printTime"])                                
+                                elif progress > 0:
+                                    self.setTimeTotal(json_data[0]["printTime"] / (progress / 100))
+                                else:
+                                    self.setTimeTotal(0)
                             else:
+                                self.setTimeElapsed(0)
                                 self.setTimeTotal(0)
-                        else:
-                            self.setTimeElapsed(0)
-                            self.setTimeTotal(0)
-                        self.setJobName(json_data[0]["job"])
+                            self.setJobName(json_data[0]["job"])
+                    except:
+                        self._updateJobState("offline")
+                        self.setConnectionText(i18n_catalog.i18nc("@info:status", "Repetier on {0} configuration is invalid").format(self._key))
                 else:
-                    pass  # TODO: Handle errors
-
+                    self._updateJobState("offline")
+                    self.setConnectionText(i18n_catalog.i18nc("@info:status", "Repetier on {0} bad response").format(self._key))
             elif self._api_prefix + "?a=getPrinterConfig" in reply.url().toString():  # Repetier settings dump from /settings:
                 if http_status_code == 200:
                     try:

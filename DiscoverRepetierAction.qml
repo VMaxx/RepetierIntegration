@@ -69,7 +69,7 @@ Cura.MachineAction
             {
                 id: removeButton
                 text: catalog.i18nc("@action:button", "Remove")
-                enabled: base.selectedInstance != null && base.selectedInstance.getProperty("manual") == "true"
+                enabled: base.selectedInstance != null 
                 onClicked: manager.removeManualInstance(base.selectedInstance.name)
             }
 
