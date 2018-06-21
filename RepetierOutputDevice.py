@@ -337,6 +337,7 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
     def pausePrint(self):
         self._sendJobCommand("pause")
 
+
     def resumePrint(self):
         if not self._printers[0].activePrintJob:
             return
@@ -427,19 +428,24 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
 
             ##  Create parts (to be placed inside multipart)
         post_part = QHttpPart()
-        post_part.setHeader(QNetworkRequest.ContentDispositionHeader, "form-data; name=\"filename\"; filename=\"%s\"" % file_name)
+        post_part.setHeader(QNetworkRequest.ContentDispositionHeader, "form-data; name=\"a\"")
         post_part.setBody(b"upload")
         self._post_multi_part.append(post_part)
 
-        if self._auto_print and not self._forced_queue:
-            post_part = QHttpPart()
-            post_part.setHeader(QNetworkRequest.ContentDispositionHeader, "form-data; name=\"print\"")
-            post_part.setBody(b"upload")
-            self._post_multi_part.append(post_part)
+        ##if self._auto_print and not self._forced_queue:
+        ##    post_part = QHttpPart()
+        ##    post_part.setHeader(QNetworkRequest.ContentDispositionHeader, "form-data; name=\"print\"")
+        ##    post_part.setBody(b"upload")
+        ##    self._post_multi_part.append(post_part)
             
         post_part = QHttpPart()
         post_part.setHeader(QNetworkRequest.ContentDispositionHeader, "form-data; name=\"file\"; filename=\"%s\"" % file_name)
         post_part.setBody(single_string_file_data.encode())
+        self._post_multi_part.append(post_part)
+        post_part = QHttpPart()
+        post_part.setHeader(QNetworkRequest.ContentDispositionHeader, "form-data; name=\"name\"")
+        b = bytes(file_name, 'utf-8')
+        post_part.setBody(b)
         self._post_multi_part.append(post_part)
 
         destination = "local"
@@ -514,8 +520,7 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         self._command_reply = self._manager.post(command_request, data.encode())
 
 
-
-    ##  Handler for all requests that have finished.
+        ##  Handler for all requests that have finished.
     def _onRequestFinished(self, reply):
         if reply.error() == QNetworkReply.TimeoutError:
             Logger.log("w", "Received a timeout on a request to the instance")
@@ -558,39 +563,44 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                         json_data = {}
                     #if "temperature" in json_data:
                     try:
-                        if not self._number_of_extruders_set:
-                            if "numExtruder" in json_data[self._key]:
-                                self._number_of_extruders = 0
-                                printer_state = "idle"
-                                #while "tool%d" % self._num_extruders in json_data["temperature"]:
-                                self._number_of_extruders=json_data[self._key]["numExtruder"]
-                                if self._number_of_extruders > 1:
-                                    # Recreate list of printers to match the new _number_of_extruders
-                                    self._createPrinterList()
-                                    printer = self._printers[0]
+                        if "numExtruder" in json_data[self._key]:
+                            self._number_of_extruders = 0
+                            printer_state = "idle"
+                            #while "tool%d" % self._num_extruders in json_data["temperature"]:
+                            self._number_of_extruders=json_data[self._key]["numExtruder"]
+                            if self._number_of_extruders > 1:
+                                # Recreate list of printers to match the new _number_of_extruders
+                                self._createPrinterList()
+                                printer = self._printers[0]
 
-                                if self._number_of_extruders > 0:
-                                    self._number_of_extruders_set = True
-          
-                                # Check for hotend temperatures
-                                for index in range(0, self._number_of_extruders):
-                                    extruder = printer.extruders[index]
-                                    if "extruder" in json_data[self._key]:                            
-                                        hotend_temperatures = json_data[self._key]["extruder"]                                
-                                        extruder.updateTargetHotendTemperature(hotend_temperatures[index]["tempSet"])
-                                        extruder.updateHotendTemperature(hotend_temperatures[index]["tempRead"])                                    
-                                    else:
-                                        extruder.updateTargetHotendTemperature(0)
-                                        extruder.updateHotendTemperature(0)
-
-                                if "heatedBed" in json_data[self._key]:
-                                    bed_temperatures = json_data[self._key]["heatedBed"]
-                                    printer.updateBedTemperature(bed_temperatures["tempRead"])
-                                    printer.updateTargetBedTemperature(bed_temperatures["tempSet"])
+                            if self._number_of_extruders > 0:
+                                self._number_of_extruders_set = True
+      
+                            # Check for hotend temperatures
+                            for index in range(0, self._number_of_extruders):
+                                extruder = printer.extruders[index]
+                                if "extruder" in json_data[self._key]:                            
+                                    hotend_temperatures = json_data[self._key]["extruder"]
+                                    #Logger.log("d", "target end temp %s", hotend_temperatures[index]["tempSet"])
+                                    #Logger.log("d", "target end temp %s", hotend_temperatures[index]["tempRead"])
+                                    extruder.updateTargetHotendTemperature(hotend_temperatures[index]["tempSet"])
+                                    extruder.updateHotendTemperature(hotend_temperatures[index]["tempRead"])                                    
                                 else:
-                                    printer.updateBedTemperature(0)
-                                    printer.updateTargetBedTemperature(0)
-                                printer.updateState(printer_state)
+                                    extruder.updateTargetHotendTemperature(0)
+                                    extruder.updateHotendTemperature(0)
+                        #Logger.log("d", "json_data %s", json_data[self._key])
+                        if "heatedBed" in json_data[self._key]:
+                            bed_temperatures = json_data[self._key]["heatedBed"]
+                            actual_temperature = bed_temperatures["tempRead"] if bed_temperatures["tempRead"] is not None else -1
+                            printer.updateBedTemperature(actual_temperature)
+                            target_temperature = bed_temperatures["tempSet"] if bed_temperatures["tempSet"] is not None else -1                                    
+                            printer.updateTargetBedTemperature(target_temperature)
+                            #Logger.log("d", "target bed temp %s", target_temperature)
+                            #Logger.log("d", "actual bed temp %s", actual_temperature)
+                        else:
+                            printer.updateBedTemperature(-1)
+                            printer.updateTargetBedTemperature(0)
+                        printer.updateState(printer_state)
                     except:
                         Logger.log("w", "Received invalid JSON from Repetier instance.")                    
                         json_data = {}
@@ -756,12 +766,6 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
 
         else:
             Logger.log("d", "RepetierOutputDevice got an unhandled operation %s", reply.operation())
-
-
-
-
-
-
 
     def _onUploadProgress(self, bytes_sent, bytes_total):
         if bytes_total > 0:
