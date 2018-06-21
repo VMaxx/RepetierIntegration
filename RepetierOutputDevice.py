@@ -1,12 +1,17 @@
 from UM.i18n import i18nCatalog
-from UM.Logger import Logger
-from UM.Settings.DefinitionContainer import DefinitionContainer
 from UM.Application import Application
+from UM.Logger import Logger
 from UM.Signal import signalemitter
 from UM.Message import Message
 from UM.Util import parseBool
 
 from cura.PrinterOutputDevice import PrinterOutputDevice, ConnectionState
+from cura.PrinterOutput.NetworkedPrinterOutputDevice import NetworkedPrinterOutputDevice
+from cura.PrinterOutput.PrinterOutputModel import PrinterOutputModel
+from cura.PrinterOutput.PrintJobOutputModel import PrintJobOutputModel
+from cura.PrinterOutput.NetworkCamera import NetworkCamera
+
+from cura.PrinterOutput.GenericOutputController import GenericOutputController
 
 from PyQt5.QtNetwork import QHttpMultiPart, QHttpPart, QNetworkRequest, QNetworkAccessManager, QNetworkReply
 from PyQt5.QtCore import QUrl, QTimer, pyqtSignal, pyqtProperty, pyqtSlot, QCoreApplication
@@ -23,9 +28,9 @@ i18n_catalog = i18nCatalog("cura")
 
 ##  Repetier connected (wifi / lan) printer using the Repetier API
 @signalemitter
-class RepetierOutputDevice(PrinterOutputDevice):
-    def __init__(self, key, address, port, properties):
-        super().__init__(key)
+class RepetierOutputDevice(NetworkedPrinterOutputDevice):
+    def __init__(self, key, address: str, port, properties, parent = None):
+        super().__init__(device_id = key, address = address, properties = properties, parent = parent)
 
         self._address = address
         self._port = port
@@ -37,10 +42,10 @@ class RepetierOutputDevice(PrinterOutputDevice):
 
         self._gcode = None
         self._auto_print = True
-
+        self._forced_queue = False
         # We start with a single extruder, but update this when we get data from Repetier
-        self._num_extruders_set = False
-        self._num_extruders = 1
+        self._number_of_extruders_set = False
+        self._number_of_extruders = 1
 
         # Try to get version information from plugin.json
         plugin_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "plugin.json")
@@ -100,25 +105,24 @@ class RepetierOutputDevice(PrinterOutputDevice):
         self._job_reply = None
         self._command_reply = None
 
-        self._image_reply = None
-        self._stream_buffer = b""
-        self._stream_buffer_start_index = -1
-
         self._post_reply = None
         self._post_multi_part = None
-        self._post_part = None
 
         self._progress_message = None
         self._error_message = None
         self._connection_message = None
+
+        self._queued_gcode_commands = []
+        self._queued_gcode_timer = QTimer()
+        self._queued_gcode_timer.setInterval(0)
+        self._queued_gcode_timer.setSingleShot(True)
+        self._queued_gcode_timer.timeout.connect(self._sendQueuedGcode)
 
         self._update_timer = QTimer()
         self._update_timer.setInterval(2000)  # TODO; Add preference for update interval
         self._update_timer.setSingleShot(False)
         self._update_timer.timeout.connect(self._update)
 
-        self._camera_image_id = 0
-        self._camera_image = QImage()
         self._camera_mirror = ""
         self._camera_rotation = 0
         self._camera_url = ""
@@ -134,10 +138,8 @@ class RepetierOutputDevice(PrinterOutputDevice):
         self._recreate_network_manager_time = 30 # If we have no connection, re-create network manager every 30 sec.
         self._recreate_network_manager_count = 1
 
-        self._preheat_timer = QTimer()
-        self._preheat_timer.setSingleShot(True)
-        self._preheat_timer.timeout.connect(self.cancelPreheatBed)
-
+        self._output_controller = GenericOutputController(self)
+        
     def getProperties(self):
         return self._properties
 
@@ -166,7 +168,7 @@ class RepetierOutputDevice(PrinterOutputDevice):
 
     ##  Version (as returned from the zeroConf properties)
     @pyqtProperty(str, constant=True)
-    def RepetierVersion(self):
+    def repetierVersion(self):
         return self._properties.get(b"version", b"").decode("utf-8")
 
     ## IPadress of this instance
@@ -202,33 +204,6 @@ class RepetierOutputDevice(PrinterOutputDevice):
             "mirror": self._camera_mirror,
             "rotation": self._camera_rotation,
         }
-
-    def _startCamera(self):
-        global_container_stack = Application.getInstance().getGlobalContainerStack()
-        if not global_container_stack or not parseBool(global_container_stack.getMetaDataEntry("repetier_show_camera", False)) or self._camera_url == "":
-            return
-
-        # Start streaming mjpg stream
-        url = QUrl(self._camera_url)
-        image_request = QNetworkRequest(url)
-        image_request.setRawHeader(self._user_agent_header, self._user_agent)
-        if self._camera_shares_proxy and self._basic_auth_data:
-            image_request.setRawHeader(self._basic_auth_header, self._basic_auth_data)
-        self._image_reply = self._manager.get(image_request)
-        self._image_reply.downloadProgress.connect(self._onStreamDownloadProgress)
-
-    def _stopCamera(self):
-        if self._image_reply:
-            self._image_reply.abort()
-            self._image_reply.downloadProgress.disconnect(self._onStreamDownloadProgress)
-            self._image_reply = None
-        image_request = None
-
-        self._stream_buffer = b""
-        self._stream_buffer_start_index = -1
-
-        self._camera_image = QImage()
-        self.newImage.emit()
 
     def _update(self):
         if self._last_response_time:
@@ -306,7 +281,7 @@ class RepetierOutputDevice(PrinterOutputDevice):
         self._manager.finished.connect(self._onRequestFinished)
 
     def _createApiRequest(self, end_point):
-        ##Logger.log("d", "Debug: %s", end_point)
+        #Logger.log("d", "_createApiRequest Debug: %s", end_point)
         if "upload" in end_point:
             request = QNetworkRequest(QUrl(self._job_url + "?a=" + end_point))
         else:
@@ -318,7 +293,6 @@ class RepetierOutputDevice(PrinterOutputDevice):
         return request
 
     def close(self):
-        self._updateJobState("")
         self.setConnectionState(ConnectionState.closed)
         if self._progress_message:
             self._progress_message.hide()
@@ -326,16 +300,17 @@ class RepetierOutputDevice(PrinterOutputDevice):
             self._error_message.hide()
         self._update_timer.stop()
 
-        self._stopCamera()
-
     def requestWrite(self, node, file_name = None, filter_by_machine = False, file_handler = None, **kwargs):
         self.writeStarted.emit(self)
-        self._gcode = getattr(Application.getInstance().getController().getScene(), "gcode_list")
+
+        active_build_plate = Application.getInstance().getMultiBuildPlateModel().activeBuildPlate
+        scene = Application.getInstance().getController().getScene()
+        gcode_dict = getattr(scene, "gcode_dict", None)
+        if not gcode_dict:
+            return
+        self._gcode = gcode_dict.get(active_build_plate, None)
 
         self.startPrint()
-
-    def isConnected(self):
-        return self._connection_state != ConnectionState.closed and self._connection_state != ConnectionState.error
 
     ##  Start requesting data from the instance
     def connect(self):
@@ -347,7 +322,7 @@ class RepetierOutputDevice(PrinterOutputDevice):
         self._update_timer.start()
 
         self._last_response_time = None
-        self.setAcceptsCommands(False)
+        self._setAcceptsCommands(False)
         self.setConnectionText(i18n_catalog.i18nc("@info:status", "Connecting to Repetier on {0}").format(self._base_url))
 
         ## Request 'settings' dump
@@ -359,43 +334,40 @@ class RepetierOutputDevice(PrinterOutputDevice):
         Logger.log("d", "Connection with instance %s with url %s stopped", self._key, self._base_url)
         self.close()
 
-    newImage = pyqtSignal()
+    def pausePrint(self):
+        self._sendJobCommand("pause")
 
-    @pyqtProperty(QUrl, notify = newImage)
-    def cameraImage(self):
-        self._camera_image_id += 1
-        # There is an image provider that is called "camera". In order to ensure that the image qml object, that
-        # requires a QUrl to function, updates correctly we add an increasing number. This causes to see the QUrl
-        # as new (instead of relying on cached version and thus forces an update.
-        temp = "image://camera/" + str(self._camera_image_id)
-        return QUrl(temp, QUrl.TolerantMode)
+    def resumePrint(self):
+        if not self._printers[0].activePrintJob:
+            return
 
-    def getCameraImage(self):
-        return self._camera_image
+        if self._printers[0].activePrintJob.state == "paused":
+            self._sendJobCommand("pause")
+        else:
+            self._sendJobCommand("start")
 
-    def _setJobState(self, job_state):
-        if job_state == "abort":
-            command = "cancel"
-        elif job_state == "print":
-            if self.jobState == "paused":
-                command = "pause"
-            else:
-                command = "start"
-        elif job_state == "pause":
-            command = "pause"
-
-        if command:
-            self._sendJobCommand(command)
+    def cancelPrint(self):
+        self._sendJobCommand("cancel")
 
     def startPrint(self):
         global_container_stack = Application.getInstance().getGlobalContainerStack()
         if not global_container_stack:
             return
 
-        self._auto_print = parseBool(global_container_stack.getMetaDataEntry("repetier_auto_print", True))
+        if self._error_message:
+            self._error_message.hide()
+            self._error_message = None
 
-        if self.jobState not in ["ready", ""]:
-            if self.jobState == "offline":
+        if self._progress_message:
+            self._progress_message.hide()
+            self._progress_message = None
+
+        self._auto_print = parseBool(global_container_stack.getMetaDataEntry("repetier_auto_print", True))
+        self._forced_queue = False
+
+        if self.activePrinter.state not in ["idle", ""]:
+            Logger.log("d", "Tried starting a print, but current state is %s" % self.activePrinter.state)
+            if self.activePrinter.state == "offline":
                 self._error_message = Message(i18n_catalog.i18nc("@info:status", "Repetier is offline. Unable to start a new job."))
             elif self._auto_print:
                 self._error_message = Message(i18n_catalog.i18nc("@info:status", "Repetier is busy. Unable to start a new job."))
@@ -404,73 +376,82 @@ class RepetierOutputDevice(PrinterOutputDevice):
                 self._error_message = None
 
             if self._error_message:
+                self._error_message.addAction("Queue", i18n_catalog.i18nc("@action:button", "Queue job"), None, i18n_catalog.i18nc("@action:tooltip", "Queue this print job so it can be printed later"))
+                self._error_message.actionTriggered.connect(self._queuePrint)
                 self._error_message.show()
                 return
 
-        self._preheat_timer.stop()
+        self._startPrint()
 
-        if self._auto_print:
-            Application.getInstance().showPrintMonitor.emit(True)
+    def _queuePrint(self, message_id, action_id):
+        if self._error_message:
+            self._error_message.hide()
+        self._forced_queue = True
+        self._startPrint()
+        
+    def _startPrint(self):
+        global_container_stack = Application.getInstance().getGlobalContainerStack()
+        if self._auto_print and not self._forced_queue:
+            Application.getInstance().getController().setActiveStage("MonitorStage")
 
-        try:
-            self._progress_message = Message(i18n_catalog.i18nc("@info:status", "Sending data to Repetier"), 0, False, -1)
-            self._progress_message.addAction("Cancel", i18n_catalog.i18nc("@action:button", "Cancel"), None, "")
-            self._progress_message.actionTriggered.connect(self._cancelSendGcode)
-            self._progress_message.show()
+            # cancel any ongoing preheat timer before starting a print
+            try:
+                self._printers[0].stopPreheatTimers()
+            except AttributeError:
+                # stopPreheatTimers was added after Cura 3.3 beta
+                pass
 
-            ## Mash the data into single string
-            single_string_file_data = ""
-            last_process_events = time()
-            for line in self._gcode:
-                single_string_file_data += line
-                if time() > last_process_events + 0.05:
-                    # Ensure that the GUI keeps updated at least 20 times per second.
-                    QCoreApplication.processEvents()
-                    last_process_events = time()
+        self._progress_message = Message(i18n_catalog.i18nc("@info:status", "Sending data to Repetier"), 0, False, -1)
+        self._progress_message.addAction("Cancel", i18n_catalog.i18nc("@action:button", "Cancel"), None, "")
+        self._progress_message.actionTriggered.connect(self._cancelSendGcode)
+        self._progress_message.show()
 
-            job_name = Application.getInstance().getPrintInformation().jobName.strip()
-            ##Logger.log("d", "debug Print job: [%s]", job_name)
-            if job_name is "":
-                job_name = "untitled_print"
-            file_name = "%s.gcode" % job_name
+        ## Mash the data into single string
+        single_string_file_data = ""
+        last_process_events = time()
+        for line in self._gcode:
+            single_string_file_data += line
+            if time() > last_process_events + 0.05:
+                # Ensure that the GUI keeps updated at least 20 times per second.
+                QCoreApplication.processEvents()
+                last_process_events = time()
 
-            ##  Create multi_part request
-            self._post_multi_part = QHttpMultiPart(QHttpMultiPart.FormDataType)
+        job_name = Application.getInstance().getPrintInformation().jobName.strip()
+        #Logger.log("d", "debug Print job: [%s]", job_name)
+        if job_name is "":
+            job_name = "untitled_print"
+        file_name = "%s.gcode" % job_name
+
+        ##  Create multi_part request
+        self._post_multi_part = QHttpMultiPart(QHttpMultiPart.FormDataType)
 
             ##  Create parts (to be placed inside multipart)
-            self._post_part = QHttpPart()
-            self._post_part.setHeader(QNetworkRequest.ContentDispositionHeader, "form-data; name=\"a\"" )
-            self._post_part.setBody(b"upload")
-            self._post_multi_part.append(self._post_part)
+        post_part = QHttpPart()
+        post_part.setHeader(QNetworkRequest.ContentDispositionHeader, "form-data; name=\"filename\"; filename=\"%s\"" % file_name)
+        post_part.setBody(b"upload")
+        self._post_multi_part.append(post_part)
 
-            ##if self._auto_print:
-            ##    self._post_part = QHttpPart()
-            ##    self._post_part.setHeader(QNetworkRequest.ContentDispositionHeader, "form-data; name=\"%s\"" % file_name)
-            ##    self._post_part.setBody(b"upload")
-            ##    self._post_multi_part.append(self._post_part)
+        if self._auto_print and not self._forced_queue:
+            post_part = QHttpPart()
+            post_part.setHeader(QNetworkRequest.ContentDispositionHeader, "form-data; name=\"print\"")
+            post_part.setBody(b"upload")
+            self._post_multi_part.append(post_part)
+            
+        post_part = QHttpPart()
+        post_part.setHeader(QNetworkRequest.ContentDispositionHeader, "form-data; name=\"file\"; filename=\"%s\"" % file_name)
+        post_part.setBody(single_string_file_data.encode())
+        self._post_multi_part.append(post_part)
 
-            self._post_part = QHttpPart()
-            self._post_part.setHeader(QNetworkRequest.ContentDispositionHeader, "form-data; name=\"filename\"; filename=\"%s\"" % file_name)
-            self._post_part.setBody(single_string_file_data.encode())
-            self._post_multi_part.append(self._post_part)
+        destination = "local"
+        if self._sd_supported and parseBool(global_container_stack.getMetaDataEntry("Repetier_store_sd", False)):
+            destination = "sdcard"
 
-            self._post_part = QHttpPart()
-            self._post_part.setHeader(QNetworkRequest.ContentDispositionHeader, "form-data; name=\"name\"")
-            b = bytes(file_name, 'utf-8')
-            self._post_part.setBody(b)
-            self._post_multi_part.append(self._post_part)
-
-            destination = "local"
-            if self._sd_supported and parseBool(global_container_stack.getMetaDataEntry("Repetier_store_sd", False)):
-                destination = "sdcard"
-
+        try:
             ##  Post request + data
             #post_request = self._createApiRequest("files/" + destination)
             post_request = self._createApiRequest("upload")
             self._post_reply = self._manager.post(post_request, self._post_multi_part)
             self._post_reply.uploadProgress.connect(self._onUploadProgress)
-
-            self._gcode = None
 
         except IOError:
             self._progress_message.hide()
@@ -479,6 +460,8 @@ class RepetierOutputDevice(PrinterOutputDevice):
         except Exception as e:
             self._progress_message.hide()
             Logger.log("e", "An exception occurred in network connection: %s" % str(e))
+
+        self._gcode = None
 
     def _cancelSendGcode(self, message_id, action_id):
         if self._post_reply:
@@ -490,12 +473,20 @@ class RepetierOutputDevice(PrinterOutputDevice):
 
             self._post_reply.abort()
             self._post_reply = None
-        self._progress_message.hide()
+        if self._progress_message:
+            self._progress_message.hide()
 
-    def _sendCommand(self, command):
-        #self._sendCommandToApi("printer/command", command)
-        self._sendCommandToApi("send", "&data={\"cmd\":\"" + command + "\"}")
-        Logger.log("d", "Sent gcode command to Repetier instance: %s", command)
+    def sendCommand(self, command):
+        self._queued_gcode_commands.append(command)
+        self._queued_gcode_timer.start()
+
+    # Send gcode commands that are queued in quick succession as a single batch
+    def _sendQueuedGcode(self):
+        if self._queued_gcode_commands:
+            #self._sendCommandToApi("printer/command", self._queued_gcode_commands)
+            self._sendCommandToApi("send", "&data={\"cmd\":\"" + self._queued_gcode_commands + "\"}")
+            Logger.log("d", "Sent gcode command to Repetier instance: %s", self._queued_gcode_commands)
+            self._queued_gcode_commands = []
 
     def _sendJobCommand(self, command):
         #self._sendCommandToApi("job", command)
@@ -508,106 +499,21 @@ class RepetierOutputDevice(PrinterOutputDevice):
         if (command=="cancel"):            
             self._manager.get(self._createApiRequest("stopJob"))            
             ##self._sendCommandToApi("send", "&data={\"cmd\":\"stopJob\"}")
-            
-        Logger.log("d", "Sent job command to Repetier instance: %s %s" % (command,self.jobState))
+        #Logger.log("d", "Sent job command to Repetier instance: %s %s" % (command,self.jobState))
 
-    def _sendCommandToApi(self, end_point, command):
+    def _sendCommandToApi(self, end_point, commands):
         command_request = self._createApiRequest(end_point)
         command_request.setHeader(QNetworkRequest.ContentTypeHeader, "application/json")
 
-        data = "{\"command\": \"%s\"}" % command
+        if isinstance(commands, list):
+            data = json.dumps({"commands": commands})
+        else:
+            data = json.dumps({"command": commands})            
+            #data = "{\"command\": \"%s\"}" % commands
+
         self._command_reply = self._manager.post(command_request, data.encode())
 
-    ##  Pre-heats the heated bed of the printer.
-    #
-    #   \param temperature The temperature to heat the bed to, in degrees
-    #   Celsius.
-    #   \param duration How long the bed should stay warm, in seconds.
-    @pyqtSlot(float, float)
-    def preheatBed(self, temperature, duration):
-        self._setTargetBedTemperature(temperature)
-        if duration > 0:
-            self._preheat_timer.setInterval(duration * 1000)
-            self._preheat_timer.start()
-        else:
-            self._preheat_timer.stop()
 
-    ##  Cancels pre-heating the heated bed of the printer.
-    #
-    #   If the bed is not pre-heated, nothing happens.
-    @pyqtSlot()
-    def cancelPreheatBed(self):
-        self._setTargetBedTemperature(0)
-        self._preheat_timer.stop()
-
-    ##  Changes the target bed temperature on the Repetier instance.
-    #
-    #   /param temperature The new target temperature of the bed.
-    def _setTargetBedTemperature(self, temperature):
-        if not self._updateTargetBedTemperature(temperature):
-            Logger.log("d", "Target bed temperature is already set to %s", temperature)
-            return
-
-        Logger.log("d", "Setting bed temperature to %s", temperature)
-        self._sendCommand("M140 S%s" % temperature)
-
-    ##  Updates the target bed temperature from the printer, and emit a signal if it was changed.
-    #
-    #   /param temperature The new target temperature of the bed.
-    #   /return boolean, True if the temperature was changed, false if the new temperature has the same value as the already stored temperature
-    def _updateTargetBedTemperature(self, temperature):
-        if self._target_bed_temperature == temperature:
-            return False
-        self._target_bed_temperature = temperature
-        self.targetBedTemperatureChanged.emit()
-        return True
-
-    ##  Changes the target bed temperature on the Repetier instance.
-    #
-    #   /param index The index of the hotend.
-    #   /param temperature The new target temperature of the bed.
-    def _setTargetHotendTemperature(self, index, temperature):
-        if not self._updateTargetHotendTemperature(index, temperature):
-            Logger.log("d", "Target hotend %s temperature is already set to %s", index, temperature)
-            return
-
-        Logger.log("d", "Setting hotend %s temperature to %s", index, temperature)
-        self._sendCommand("M104 T%s S%s" % (index, temperature))
-
-    ##  Updates the target hotend temperature from the printer, and emit a signal if it was changed.
-    #
-    #   /param index The index of the hotend.
-    #   /param temperature The new target temperature of the hotend.
-    #   /return boolean, True if the temperature was changed, false if the new temperature has the same value as the already stored temperature
-    def _updateTargetHotendTemperature(self, index, temperature):
-        if self._target_hotend_temperatures[index] == temperature:
-            return False
-        self._target_hotend_temperatures[index] = temperature
-        self.targetHotendTemperaturesChanged.emit()
-        return True
-
-    def _setHeadPosition(self, x, y , z, speed):
-        self._sendCommand("G0 X%s Y%s Z%s F%s" % (x, y, z, speed))
-
-    def _setHeadX(self, x, speed):
-        self._sendCommand("G0 X%s F%s" % (x, speed))
-
-    def _setHeadY(self, y, speed):
-        self._sendCommand("G0 Y%s F%s" % (y, speed))
-
-    def _setHeadZ(self, z, speed):
-        self._sendCommand("G0 Y%s F%s" % (z, speed))
-
-    def _homeHead(self):
-        self._sendCommand("G28")
-
-    def _homeBed(self):
-        self._sendCommand("G28 Z")
-
-    def _moveHead(self, x, y, z, speed):
-        self._sendCommand("G91")
-        self._sendCommand("G0 X%s Y%s Z%s F%s" % (x, y, z, speed))
-        self._sendCommand("G90")
 
     ##  Handler for all requests that have finished.
     def _onRequestFinished(self, reply):
@@ -633,9 +539,14 @@ class RepetierOutputDevice(PrinterOutputDevice):
 
         if reply.operation() == QNetworkAccessManager.GetOperation:
             if self._api_prefix + "?a=stateList" in reply.url().toString():  # Status update from /printer.
+                if not self._printers:
+                    self._createPrinterList()
+
+                printer = self._printers[0]
+
                 if http_status_code == 200:
                     if not self.acceptsCommands:
-                        self.setAcceptsCommands(True)
+                        self._setAcceptsCommands(True)
                         self.setConnectionText(i18n_catalog.i18nc("@info:status", "Connected to Repetier on {0}").format(self._key))
 
                     if self._connection_state == ConnectionState.connecting:
@@ -647,69 +558,100 @@ class RepetierOutputDevice(PrinterOutputDevice):
                         json_data = {}
                     #if "temperature" in json_data:
                     try:
-                        if "numExtruder" in json_data[self._key]:
-                            self._num_extruders = 0
-                            #while "tool%d" % self._num_extruders in json_data["temperature"]:
-                            #   self._num_extruders = self._num_extruders + 1
-                            self._num_extruders=json_data[self._key]["numExtruder"]
-                 
-                            # Reinitialise from PrinterOutputDevice to match the new _num_extruders
-                            self._hotend_temperatures = [0] * self._num_extruders
-                            self._target_hotend_temperatures = [0] * self._num_extruders
-                            self._num_extruders_set = True
-      
-                            # Check for hotend temperatures
-                            for index in range(0, self._num_extruders):
-                                if "extruder" in json_data[self._key]:                            
-                                    hotend_temperatures = json_data[self._key]["extruder"]                                
-                                    self._setHotendTemperature(index, hotend_temperatures[index]["tempRead"])
-                                    self._updateTargetHotendTemperature(index, hotend_temperatures[index]["tempSet"])
-                                else:
-                                    self._setHotendTemperature(index, 0)
-                                    self._updateTargetHotendTemperature(index, 0)
+                        if not self._number_of_extruders_set:
+                            if "numExtruder" in json_data[self._key]:
+                                self._number_of_extruders = 0
+                                printer_state = "idle"
+                                #while "tool%d" % self._num_extruders in json_data["temperature"]:
+                                self._number_of_extruders=json_data[self._key]["numExtruder"]
+                                if self._number_of_extruders > 1:
+                                    # Recreate list of printers to match the new _number_of_extruders
+                                    self._createPrinterList()
+                                    printer = self._printers[0]
 
-                            if "heatedBed" in json_data[self._key]:
-                                bed_temperatures = json_data[self._key]["heatedBed"]
-                                self._setBedTemperature(bed_temperatures["tempRead"])
-                                self._updateTargetBedTemperature(bed_temperatures["tempSet"])
-                            else:
-                                self._setBedTemperature(0)
-                                self._updateTargetBedTemperature(0)
+                                if self._number_of_extruders > 0:
+                                    self._number_of_extruders_set = True
+          
+                                # Check for hotend temperatures
+                                for index in range(0, self._number_of_extruders):
+                                    extruder = printer.extruders[index]
+                                    if "extruder" in json_data[self._key]:                            
+                                        hotend_temperatures = json_data[self._key]["extruder"]                                
+                                        extruder.updateTargetHotendTemperature(hotend_temperatures[index]["tempSet"])
+                                        extruder.updateHotendTemperature(hotend_temperatures[index]["tempRead"])                                    
+                                    else:
+                                        extruder.updateTargetHotendTemperature(0)
+                                        extruder.updateHotendTemperature(0)
+
+                                if "heatedBed" in json_data[self._key]:
+                                    bed_temperatures = json_data[self._key]["heatedBed"]
+                                    printer.updateBedTemperature(bed_temperatures["tempRead"])
+                                    printer.updateTargetBedTemperature(bed_temperatures["tempSet"])
+                                else:
+                                    printer.updateBedTemperature(0)
+                                    printer.updateTargetBedTemperature(0)
+                                printer.updateState(printer_state)
                     except:
-                        Logger.log("w", "Received invalid JSON from Repetier instance.")
+                        Logger.log("w", "Received invalid JSON from Repetier instance.")                    
                         json_data = {}
-                        self._updateJobState("offline")
-                        self.setConnectionText(i18n_catalog.i18nc("@info:status", "Repetier on {0} configuration is invalid").format(self._key))                        
+                        printer.activePrintJob.updateState("offline")
+                        self.setConnectionText(i18n_catalog.i18nc("@info:status", "Repetier on {0} configuration is invalid").format(self._key))
+
                 elif http_status_code == 401:
-                    self._updateJobState("offline")
+                    printer.updateState("offline")
+                    if printer.activePrintJob:
+                        printer.activePrintJob.updateState("offline")
                     self.setConnectionText(i18n_catalog.i18nc("@info:status", "Repetier on {0} does not allow access to print").format(self._key))
+                    pass
                 elif http_status_code == 409:
                     if self._connection_state == ConnectionState.connecting:
                         self.setConnectionState(ConnectionState.connected)
 
-                    self._updateJobState("offline")
+                    printer.updateState("offline")
+                    if printer.activePrintJob:
+                        printer.activePrintJob.updateState("offline")
                     self.setConnectionText(i18n_catalog.i18nc("@info:status", "The printer connected to Repetier on {0} is not operational").format(self._key))
                 else:
-                    self._updateJobState("offline")
+                    printer.updateState("offline")
+                    if printer.activePrintJob:
+                        printer.activePrintJob.updateState("offline")
                     Logger.log("w", "Received an unexpected returncode: %d", http_status_code)
 
             elif self._api_prefix + "?a=listPrinter" in reply.url().toString():  # Status update from /job:
+                if not self._printers:
+                    self._createPrinterList()
+                printer = self._printers[0]
                 if http_status_code == 200:
                     try:
                         json_data = json.loads(bytes(reply.readAll()).decode("utf-8"))
                     except json.decoder.JSONDecodeError:
                         Logger.log("w", "Received invalid JSON from Repetier instance.")
                         json_data = {}
-                    try:
-                        job_state = "ready"
-                        if "job" in json_data[0]:
-                            if json_data[0]["job"] != "none":
-                                job_state = "printing"
 
+                    #try:
+                    if printer:
+                        print_job_state = "ready"
+                        printer.updateState("idle")
+                        if printer.activePrintJob is None:
+                            print_job = PrintJobOutputModel(output_controller=self._output_controller)
+                            printer.updateActivePrintJob(print_job)
+                        else:
+                            print_job = printer.activePrintJob
+                            #job_state = "ready"
+                            #if "job" in json_data[0]:
+                            #    if json_data[0]["job"] != "none":
+                            #        job_state = "printing"
+
+                        print_job_state = "ready"
+                        if "job" in json_data[0]:
+                            Logger.log("d","Jobname: %s",json_data[0]["job"])
+                            if json_data[0]["job"] != "none":
+                                print_job.updateName(json_data[0]["job"])
+                                print_job_state = "printing"
                         if "paused" in json_data[0]:
                             if json_data[0]["paused"] != False:
-                                job_state = "paused"
-
+                                print_job_state = "paused"
+                        #printer.updateState(printer_state)
                         #if "state" in json_data:
                         #    if json_data["state"]["flags"]["error"]:
                         #        job_state = "error"
@@ -719,36 +661,35 @@ class RepetierOutputDevice(PrinterOutputDevice):
                         #        job_state = "printing"
                         #    elif json_data["state"]["flags"]["ready"]:
                         #        job_state = "ready"
-                        self._updateJobState(job_state)
+                        print_job.updateState(print_job_state)
                         
                         #progress = json_data["progress"]["completion"]
                         if "done" in json_data[0]:
                             progress = json_data[0]["done"]
-                            if progress:
-                                self.setProgress(progress)
-
                         if "start" in json_data[0]:
                             if json_data[0]["start"]:
                                 ##self.setTimeElapsed(json_data[0]["start"])
                                 ##self.setTimeElapsed(datetime.datetime.fromtimestamp(json_data[0]["start"]).strftime('%Y-%m-%d %H:%M:%S'))
-                                if json_data[0]["printedTimeComp"]:
-                                    self.setTimeTotal(json_data[0]["start"] - json_data[0]["printedTimeComp"])                                
                                 if json_data[0]["printTime"]:
-                                    self.setTimeElapsed(json_data[0]["start"] - json_data[0]["printTime"])                                
+                                    print_job.updateTimeTotal(json_data[0]["printTime"])
+                                if json_data[0]["printedTimeComp"]:
+                                    print_job.updateTimeElapsed(json_data[0]["printedTimeComp"])
                                 elif progress > 0:
-                                    self.setTimeTotal(json_data[0]["printTime"] / (progress / 100))
+                                    print_job.updateTimeTotal(json_data[0]["printTime"] * (progress / 100))
                                 else:
-                                    self.setTimeTotal(0)
+                                    print_job.updateTimeTotal(0)
                             else:
-                                self.setTimeElapsed(0)
-                                self.setTimeTotal(0)
-                            self.setJobName(json_data[0]["job"])
-                    except:
-                        self._updateJobState("offline")
-                        self.setConnectionText(i18n_catalog.i18nc("@info:status", "Repetier on {0} configuration is invalid").format(self._key))
+                                print_job.updateTimeElapsed(0)
+                                print_job.updateTimeTotal(0)
+                            print_job.updateName(json_data[0]["job"])
+                    #except:
+                    #    if printer:
+                    #        printer.activePrintJob.updateState("offline")
+                    #        self.setConnectionText(i18n_catalog.i18nc("@info:status", "Repetier on {0} configuration is invalid").format(self._key))
                 else:
-                    self._updateJobState("offline")
-                    self.setConnectionText(i18n_catalog.i18nc("@info:status", "Repetier on {0} bad response").format(self._key))
+                    if printer:
+                        printer.activePrintJob.updateState("offline")
+                        self.setConnectionText(i18n_catalog.i18nc("@info:status", "Repetier on {0} bad response").format(self._key))
             elif self._api_prefix + "?a=getPrinterConfig" in reply.url().toString():  # Repetier settings dump from /settings:
                 if http_status_code == 200:
                     try:
@@ -764,11 +705,10 @@ class RepetierOutputDevice(PrinterOutputDevice):
                         self._camera_shares_proxy = False
                         Logger.log("d", "RepetierOutputDevice: Checking streamurl")
                         stream_url = json_data["webcam"]["dynamicUrl"].replace("127.0.0.1",self._address)                        
-                        Logger.log("d", "RepetierOutputDevice: stream_url: %s",stream_url)
                         if not stream_url: #empty string or None
                             self._camera_url = ""
-                        elif stream_url[:4].lower() == "http": # absolute uri
-                            self._camera_url = stream_url
+                        elif stream_url[:4].lower() == "http": # absolute uri                        Logger.log("d", "RepetierOutputDevice: stream_url: %s",stream_url)
+                            self._camera_url=stream_url
                         elif stream_url[:2] == "//": # protocol-relative
                             self._camera_url = "%s:%s" % (self._protocol, stream_url)
                         elif stream_url[:1] == ":": # domain-relative (on another port)
@@ -779,11 +719,12 @@ class RepetierOutputDevice(PrinterOutputDevice):
                         else:
                             Logger.log("w", "Unusable stream url received: %s", stream_url)
                             self._camera_url = ""
-
                         Logger.log("d", "Set Repetier camera url to %s", self._camera_url)
+                        if self._camera_url != "" and len(self._printers) > 0:
+                            self._printers[0].setCamera(NetworkCamera(self._camera_url))
                         self._camera_rotation = 180
                         self._camera_mirror = False
-                        self.cameraOrientationChanged.emit()
+                        #self.cameraOrientationChanged.emit()
 
         elif reply.operation() == QNetworkAccessManager.PostOperation:
             if self._api_prefix + "?a=listModels" in reply.url().toString():  # Result from /files command:
@@ -795,7 +736,7 @@ class RepetierOutputDevice(PrinterOutputDevice):
                 reply.uploadProgress.disconnect(self._onUploadProgress)
                 self._progress_message.hide()
                 global_container_stack = Application.getInstance().getGlobalContainerStack()
-                if not self._auto_print:
+                if self._forced_queue or not self._auto_print:
                     location = reply.header(QNetworkRequest.LocationHeader)
                     if location:
                         file_name = QUrl(reply.header(QNetworkRequest.LocationHeader).toString()).fileName()
@@ -816,20 +757,11 @@ class RepetierOutputDevice(PrinterOutputDevice):
         else:
             Logger.log("d", "RepetierOutputDevice got an unhandled operation %s", reply.operation())
 
-    def _onStreamDownloadProgress(self, bytes_received, bytes_total):
-        self._stream_buffer += self._image_reply.readAll()
 
-        if self._stream_buffer_start_index == -1:
-            self._stream_buffer_start_index = self._stream_buffer.indexOf(b'\xff\xd8')
-        stream_buffer_end_index = self._stream_buffer.lastIndexOf(b'\xff\xd9')
 
-        if self._stream_buffer_start_index != -1 and stream_buffer_end_index != -1:
-            jpg_data = self._stream_buffer[self._stream_buffer_start_index:stream_buffer_end_index + 2]
-            self._stream_buffer = self._stream_buffer[stream_buffer_end_index + 2:]
-            self._stream_buffer_start_index = -1
 
-            self._camera_image.loadFromData(jpg_data)
-            self.newImage.emit()
+
+
 
     def _onUploadProgress(self, bytes_sent, bytes_total):
         if bytes_total > 0:
@@ -843,10 +775,18 @@ class RepetierOutputDevice(PrinterOutputDevice):
                     self._progress_message.setProgress(progress)
             else:
                 self._progress_message.hide()
-                ##self._progress_message = Message(i18n_catalog.i18nc("@info:status", "Storing data on Repetier"), 0, False, -1)
-                ##self._progress_message.show()
+                self._progress_message = Message(i18n_catalog.i18nc("@info:status", "Storing data on Repetier"), 0, False, -1)
+                self._progress_message.show()
         else:
             self._progress_message.setProgress(0)
+
+    def _createPrinterList(self):
+        printer = PrinterOutputModel(output_controller=self._output_controller, number_of_extruders=self._number_of_extruders)
+        if self._camera_url != "":
+            printer.setCamera(NetworkCamera(self._camera_url))
+        printer.updateName(self.name)
+        self._printers = [printer]
+        self.printersChanged.emit()
 
     def _onMessageActionTriggered(self, message, action):
         if action == "open_browser":

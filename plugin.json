@@ -1,8 +1,8 @@
 {
     "name": "Repetier connection",
-    "author": "fieldOfView",
-    "version": "3.0",
-    "description": "Enables sending prints to Repetier and monitoring the progress",
+    "author": "VMaxx - c/o fieldOfView",
+    "version": "3.3.2",
+    "description": "Enables network printing and monitoring to Repetier",
     "api": 4,
     "i18n-catalog": "cura"
 }
