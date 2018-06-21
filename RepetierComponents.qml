@@ -10,8 +10,8 @@ Item
 {
     id: base
 
-    property bool printerConnected: Cura.MachineManager.printerOutputDevices.length != 0
-    property bool RepetierConnected: printerConnected && Cura.MachineManager.printerOutputDevices[0].hasOwnProperty("RepetierVersion")
+    property bool printerConnected: Cura.MachineManager.printerOutputDevices.length != 0    
+    property bool repetierConnected: printerConnected && Cura.MachineManager.printerOutputDevices[0].hasOwnProperty("repetierVersion")
 
     Button
     {
@@ -21,7 +21,7 @@ Item
         text: catalog.i18nc("@action:button", "Open Repetier...")
         style: UM.Theme.styles.sidebar_action_button
         onClicked: manager.openWebPage(Cura.MachineManager.printerOutputDevices[0].baseURL)
-        visible: RepetierConnected
+        visible: repetierConnected
     }
 
     UM.I18nCatalog{id: catalog; name:"cura"}
