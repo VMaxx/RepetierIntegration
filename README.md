@@ -1,5 +1,5 @@
 # RepetierPlugin
-# Version 3.3
+# Version 3.4
 # Shane Bumpurs
 Cura plugin which enables printing directly to Repetier and monitoring the progress
 
@@ -8,7 +8,7 @@ This plugin is basically a copy of the Octoprint plugin with the necessary chang
 Installation
 ----
 * Manually:
-  - Make sure your Cura version is 3.3 there are significant changes from 3.2
+  - Make sure your Cura version is 3.4 there are significant changes from 3.2
   - Download or clone the repository into [Cura installation folder]/plugins/RepetierPlugin
     or in the plugins folder inside the configuration folder. The configuration folder can be
     found via Help -> Show Configuration Folder inside Cura.
