@@ -27,3 +27,6 @@ How to use
   able to switch to "Print to Repetier" on the bottom of the sidebar.
 
 
+Issues
+-----------
+Print jobs are all showing as dummy until I can resolve the problem.
