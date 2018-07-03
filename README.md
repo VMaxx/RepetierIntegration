@@ -25,3 +25,6 @@ How to use
   available in the Repetier settings.  If you've setup a userid and password you must click advanced and enter that information.
 - From this point on, the print monitor should be functional and you should be
   able to switch to "Print to Repetier" on the bottom of the sidebar.
+  
+  Config example:
+  ![alt text](https://user-images.githubusercontent.com/12956626/37628328-fae3cbc6-2ba6-11e8-93bc-2b138debe246.jpg "Config")
