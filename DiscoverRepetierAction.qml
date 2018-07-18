@@ -233,10 +233,14 @@ Cura.MachineAction
                             }
                         }
                         onCheck:
-                        {                            
-                            manager.testApiKey(base.selectedInstance.baseURL, apiKey.text, base.selectedInstance.getProperty("userName"), base.selectedInstance.getProperty("password"))
-                            checkOnTrigger = false;
-                            restart();
+                        {  
+                            if(base.selectedInstance != null)
+                            if(base.selectedInstance.baseURL != null)
+                            {
+                                 manager.testApiKey(base.selectedInstance.baseURL, apiKey.text, base.selectedInstance.getProperty("userName"), base.selectedInstance.getProperty("password"))
+                                 checkOnTrigger = false;
+                                 restart();
+                            }
                         }
                         onTriggered:
                         {

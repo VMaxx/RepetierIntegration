@@ -320,7 +320,13 @@ class DiscoverRepetierAction(MachineAction):
                         Logger.log("d", "DiscoverRepetierAction: reply_url: %s",reply.url())
                         if stream_url: #not empty string or None
                             self._instance_supports_camera = True
-
+                    if "webcams" in json_data and "dynamicUrl" in json_data["webcams"][0]:
+                        Logger.log("d", "DiscoverRepetierAction: Checking streamurl")
+                        stream_url = json_data["webcams"][0]["dynamicUrl"]
+                        Logger.log("d", "DiscoverRepetierAction: stream_url: %s",stream_url)
+                        Logger.log("d", "DiscoverRepetierAction: reply_url: %s",reply.url())
+                        if stream_url: #not empty string or None
+                            self._instance_supports_camera = True
                 elif http_status_code == 401:
                     Logger.log("d", "Invalid API key for Repetier.")
                     self._instance_api_key_accepted = False
