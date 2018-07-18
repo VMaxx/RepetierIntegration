@@ -28,3 +28,7 @@ How to use
   
   Config example:
   ![alt text](https://user-images.githubusercontent.com/12956626/37628328-fae3cbc6-2ba6-11e8-93bc-2b138debe246.jpg "Config")
+
+  Repetier 90.1 Webcam config issue:
+  You must choose MJPG Stream alone and not use the default.
+  ![alt text](https://user-images.githubusercontent.com/12956626/42852880-a54c0d1c-89f8-11e8-8541-bf9d691cbae4.jpg "Webcam Config")

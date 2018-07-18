@@ -598,9 +598,18 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                             #Logger.log("d", "target bed temp %s", target_temperature)
                             #Logger.log("d", "actual bed temp %s", actual_temperature)
                         else:
-                            printer.updateBedTemperature(-1)
-                            printer.updateTargetBedTemperature(0)
-                        printer.updateState(printer_state)
+                            if "heatedBeds" in json_data[self._key]:
+                                bed_temperatures = json_data[self._key]["heatedBeds"][0]
+                                actual_temperature = bed_temperatures["tempRead"] if bed_temperatures["tempRead"] is not None else -1
+                                printer.updateBedTemperature(actual_temperature)
+                                target_temperature = bed_temperatures["tempSet"] if bed_temperatures["tempSet"] is not None else -1                                    
+                                printer.updateTargetBedTemperature(target_temperature)
+                                #Logger.log("d", "target bed temp %s", target_temperature)
+                                #Logger.log("d", "actual bed temp %s", actual_temperature)
+                            else:
+                                printer.updateBedTemperature(-1)
+                                printer.updateTargetBedTemperature(0)
+                                printer.updateState(printer_state)
                     except:
                         Logger.log("w", "Received invalid JSON from Repetier instance.")                    
                         json_data = {}
@@ -713,8 +722,8 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
 
                     if "webcam" in json_data and "dynamicUrl" in json_data["webcam"]:
                         self._camera_shares_proxy = False
-                        Logger.log("d", "RepetierOutputDevice: Checking streamurl")
-                        stream_url = json_data["webcam"]["dynamicUrl"].replace("127.0.0.1",self._address)                        
+                        Logger.log("d", "RepetierOutputDevice: Checking streamurl")                        
+                        stream_url = json_data["webcam"]["dynamicUrl"].replace("127.0.0.1",self._address)
                         if not stream_url: #empty string or None
                             self._camera_url = ""
                         elif stream_url[:4].lower() == "http": # absolute uri                        Logger.log("d", "RepetierOutputDevice: stream_url: %s",stream_url)
@@ -735,7 +744,30 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                         self._camera_rotation = 180
                         self._camera_mirror = False
                         #self.cameraOrientationChanged.emit()
-
+                    if "webcams" in json_data and "dynamicUrl" in json_data["webcams"][0]:
+                        self._camera_shares_proxy = False
+                        Logger.log("d", "RepetierOutputDevice: Checking streamurl")                        
+                        stream_url = json_data["webcams"][0]["dynamicUrl"].replace("127.0.0.1",self._address)
+                        if not stream_url: #empty string or None
+                            self._camera_url = ""
+                        elif stream_url[:4].lower() == "http": # absolute uri                        Logger.log("d", "RepetierOutputDevice: stream_url: %s",stream_url)
+                            self._camera_url=stream_url
+                        elif stream_url[:2] == "//": # protocol-relative
+                            self._camera_url = "%s:%s" % (self._protocol, stream_url)
+                        elif stream_url[:1] == ":": # domain-relative (on another port)
+                            self._camera_url = "%s://%s%s" % (self._protocol, self._address, stream_url)
+                        elif stream_url[:1] == "/": # domain-relative (on same port)
+                            self._camera_url = "%s://%s:%d%s" % (self._protocol, self._address, self._port, stream_url)
+                            self._camera_shares_proxy = True
+                        else:
+                            Logger.log("w", "Unusable stream url received: %s", stream_url)
+                            self._camera_url = ""
+                        Logger.log("d", "Set Repetier camera url to %s", self._camera_url)
+                        if self._camera_url != "" and len(self._printers) > 0:
+                            self._printers[0].setCamera(NetworkCamera(self._camera_url))
+                        self._camera_rotation = 180
+                        self._camera_mirror = False
+                        #self.cameraOrientationChanged.emit()
         elif reply.operation() == QNetworkAccessManager.PostOperation:
             if self._api_prefix + "?a=listModels" in reply.url().toString():  # Result from /files command:
                 if http_status_code == 201:
