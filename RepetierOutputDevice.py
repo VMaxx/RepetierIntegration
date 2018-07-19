@@ -67,8 +67,9 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         )).encode()
 
         #base_url + "printer/api/" + self._key +
-        self._api_prefix = "printer/api/" + self._key 
-        self._job_prefix = "printer/job/" + self._key 
+        self._api_prefix = "printer/api/" + self._key
+        self._job_prefix = "printer/job/" + self._key
+        self._save_prefix = "printer/model/" + self._key
         self._api_header = "x-api-key".encode()
         self._api_key = None
 
@@ -76,6 +77,7 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         self._base_url = "%s://%s:%d%s" % (self._protocol, self._address, self._port, self._path)
         self._api_url = self._base_url + self._api_prefix
         self._job_url = self._base_url + self._job_prefix
+        self._save_url = self._base_url + self._save_prefix
 
         self._basic_auth_header = "Authorization".encode()
         self._basic_auth_data = None
@@ -283,7 +285,10 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
     def _createApiRequest(self, end_point):
         #Logger.log("d", "_createApiRequest Debug: %s", end_point)
         if "upload" in end_point:
-            request = QNetworkRequest(QUrl(self._job_url + "?a=" + end_point))
+            if self._forced_queue or not self._auto_print:
+                request = QNetworkRequest(QUrl(self._save_url + "?a=" + end_point))
+            else:
+                request = QNetworkRequest(QUrl(self._job_url + "?a=" + end_point))
         else:
             request = QNetworkRequest(QUrl(self._api_url + "?a=" + end_point))
         request.setRawHeader(self._user_agent_header, self._user_agent)
