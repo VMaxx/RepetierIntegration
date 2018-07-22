@@ -317,6 +317,17 @@ Cura.MachineAction
                     }
                     CheckBox
                     {
+                        id: flipYCheckBox
+                        text: catalog.i18nc("@label", "Flip Webcam Y")
+                        enabled: manager.instanceSupportsCamera
+                        checked: manager.instanceApiKeyAccepted && Cura.ContainerManager.getContainerMetaDataEntry(Cura.MachineManager.activeMachineId, "repetier_webcamflip_y") == "true"
+                        onClicked:
+                        {
+                            manager.setContainerMetaDataEntry(Cura.MachineManager.activeMachineId, "repetier_webcamflip_y", String(checked))
+                        }
+                    }
+                    CheckBox
+                    {
                         id: storeOnSdCheckBox
                         text: catalog.i18nc("@label", "Store G-code on the printer SD card")
                         enabled: manager.instanceSupportsSd

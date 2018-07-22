@@ -59,6 +59,7 @@ class DiscoverRepetierAction(MachineAction):
         self._instance_api_key_accepted = False
         self._instance_supports_sd = False
         self._instance_supports_camera = False
+        self._instance_webcamflip_y = False
 
         self._additional_components = None
 
@@ -139,6 +140,7 @@ class DiscoverRepetierAction(MachineAction):
         self._instance_responded = False
         self._instance_api_key_accepted = False
         self._instance_supports_sd = False
+        self._instance_webcamflip_y = False
         self._instance_supports_camera = False
         self.selectedInstanceSettingsChanged.emit()
         global_container_stack = Application.getInstance().getGlobalContainerStack()
@@ -203,6 +205,10 @@ class DiscoverRepetierAction(MachineAction):
     @pyqtProperty(bool, notify = selectedInstanceSettingsChanged)
     def instanceSupportsSd(self):
         return self._instance_supports_sd
+
+    @pyqtProperty(bool, notify = selectedInstanceSettingsChanged)
+    def instanceWebcamFlipY(self):
+        return self._instance_webcamflip_y
 
     @pyqtProperty(bool, notify = selectedInstanceSettingsChanged)
     def instanceSupportsCamera(self):

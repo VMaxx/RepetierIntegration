@@ -527,6 +527,9 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
 
         ##  Handler for all requests that have finished.
     def _onRequestFinished(self, reply):
+        global_container_stack = Application.getInstance().getGlobalContainerStack()
+        if not global_container_stack:
+            return
         if reply.error() == QNetworkReply.TimeoutError:
             Logger.log("w", "Received a timeout on a request to the instance")
             self._connection_state_before_timeout = self._connection_state
@@ -746,7 +749,8 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                         Logger.log("d", "Set Repetier camera url to %s", self._camera_url)
                         if self._camera_url != "" and len(self._printers) > 0:
                             self._printers[0].setCamera(NetworkCamera(self._camera_url))
-                        self._camera_rotation = 180
+                        if parseBool(global_container_stack.getMetaDataEntry("repetier_webcamflip_y", False)):
+                            self._camera_rotation = 180
                         self._camera_mirror = False
                         #self.cameraOrientationChanged.emit()
                     if "webcams" in json_data and "dynamicUrl" in json_data["webcams"][0]:
@@ -770,7 +774,8 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                         Logger.log("d", "Set Repetier camera url to %s", self._camera_url)
                         if self._camera_url != "" and len(self._printers) > 0:
                             self._printers[0].setCamera(NetworkCamera(self._camera_url))
-                        self._camera_rotation = 180
+                        if parseBool(global_container_stack.getMetaDataEntry("repetier_webcamflip_y", False)):
+                            self._camera_rotation = 180
                         self._camera_mirror = False
                         #self.cameraOrientationChanged.emit()
         elif reply.operation() == QNetworkAccessManager.PostOperation:
