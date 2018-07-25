@@ -4,7 +4,7 @@
 Cura plugin which enables printing directly to Repetier and monitoring the progress
 
 This plugin is basically a copy of the Octoprint plugin with the necessary changes to work with repetier server.
-
+Supports Repetier Server 86.0-90.1
 Installation
 ----
 * Manually:
