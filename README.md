@@ -32,3 +32,6 @@ How to use
   Repetier 90.1 Webcam config issue:
   You must choose MJPG Stream alone and not use the default.
   ![alt text](https://user-images.githubusercontent.com/12956626/42852880-a54c0d1c-89f8-11e8-8541-bf9d691cbae4.jpg "Webcam Config")
+  
+  Latest update to fix issues with complex instance ids provided by JPerrin72
+  
