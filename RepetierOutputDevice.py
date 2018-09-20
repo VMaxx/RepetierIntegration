@@ -753,31 +753,33 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                             self._camera_rotation = 180
                         self._camera_mirror = False
                         #self.cameraOrientationChanged.emit()
-                    if "webcams" in json_data and "dynamicUrl" in json_data["webcams"][0]:
-                        self._camera_shares_proxy = False
-                        Logger.log("d", "RepetierOutputDevice: Checking streamurl")                        
-                        stream_url = json_data["webcams"][0]["dynamicUrl"].replace("127.0.0.1",self._address)
-                        if not stream_url: #empty string or None
-                            self._camera_url = ""
-                        elif stream_url[:4].lower() == "http": # absolute uri                        Logger.log("d", "RepetierOutputDevice: stream_url: %s",stream_url)
-                            self._camera_url=stream_url
-                        elif stream_url[:2] == "//": # protocol-relative
-                            self._camera_url = "%s:%s" % (self._protocol, stream_url)
-                        elif stream_url[:1] == ":": # domain-relative (on another port)
-                            self._camera_url = "%s://%s%s" % (self._protocol, self._address, stream_url)
-                        elif stream_url[:1] == "/": # domain-relative (on same port)
-                            self._camera_url = "%s://%s:%d%s" % (self._protocol, self._address, self._port, stream_url)
-                            self._camera_shares_proxy = True
-                        else:
-                            Logger.log("w", "Unusable stream url received: %s", stream_url)
-                            self._camera_url = ""
-                        Logger.log("d", "Set Repetier camera url to %s", self._camera_url)
-                        if self._camera_url != "" and len(self._printers) > 0:
-                            self._printers[0].setCamera(NetworkCamera(self._camera_url))
-                        if parseBool(global_container_stack.getMetaDataEntry("repetier_webcamflip_y", False)):
-                            self._camera_rotation = 180
-                        self._camera_mirror = False
-                        #self.cameraOrientationChanged.emit()
+                    if "webcams" in json_data:
+                        if len(json_data["webcams"])>0:
+                            if "dynamicUrl" in json_data["webcams"][0]:
+                                self._camera_shares_proxy = False
+                                Logger.log("d", "RepetierOutputDevice: Checking streamurl")                        
+                                stream_url = json_data["webcams"][0]["dynamicUrl"].replace("127.0.0.1",self._address)
+                                if not stream_url: #empty string or None
+                                    self._camera_url = ""
+                                elif stream_url[:4].lower() == "http": # absolute uri                        Logger.log("d", "RepetierOutputDevice: stream_url: %s",stream_url)
+                                    self._camera_url=stream_url
+                                elif stream_url[:2] == "//": # protocol-relative
+                                    self._camera_url = "%s:%s" % (self._protocol, stream_url)
+                                elif stream_url[:1] == ":": # domain-relative (on another port)
+                                    self._camera_url = "%s://%s%s" % (self._protocol, self._address, stream_url)
+                                elif stream_url[:1] == "/": # domain-relative (on same port)
+                                    self._camera_url = "%s://%s:%d%s" % (self._protocol, self._address, self._port, stream_url)
+                                    self._camera_shares_proxy = True
+                                else:
+                                    Logger.log("w", "Unusable stream url received: %s", stream_url)
+                                    self._camera_url = ""
+                                Logger.log("d", "Set Repetier camera url to %s", self._camera_url)
+                                if self._camera_url != "" and len(self._printers) > 0:
+                                    self._printers[0].setCamera(NetworkCamera(self._camera_url))
+                                if parseBool(global_container_stack.getMetaDataEntry("repetier_webcamflip_y", False)):
+                                    self._camera_rotation = 180
+                                self._camera_mirror = False
+                                #self.cameraOrientationChanged.emit()
         elif reply.operation() == QNetworkAccessManager.PostOperation:
             if self._api_prefix + "?a=listModels" in reply.url().toString():  # Result from /files command:
                 if http_status_code == 201:
