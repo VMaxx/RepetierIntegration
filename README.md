@@ -1,5 +1,5 @@
 # RepetierPlugin
-# Version 3.4
+# Version 3.4.x
 # Shane Bumpurs
 Cura plugin which enables printing directly to Repetier and monitoring the progress
 
@@ -33,5 +33,6 @@ How to use
   You must choose MJPG Stream alone and not use the default.
   ![alt text](https://user-images.githubusercontent.com/12956626/42852880-a54c0d1c-89f8-11e8-8541-bf9d691cbae4.jpg "Webcam Config")
   
+  Latest update to fix issues with printers with names with spaces and single apostrophes (ex. Bob's Printer) Now gets properly translated to Bobs_Printer as Repetier converts it.
   Latest update to fix issues with complex instance ids provided by JPerrin72
   New fix for printers without webcams

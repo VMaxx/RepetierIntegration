@@ -67,9 +67,10 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         )).encode()
 
         #base_url + "printer/api/" + self._key +
-        self._api_prefix = "printer/api/" + self._key
-        self._job_prefix = "printer/job/" + self._key
-        self._save_prefix = "printer/model/" + self._key
+        
+        self._api_prefix = "printer/api/" + self._key.replace("'", "").replace(" ","_")
+        self._job_prefix = "printer/job/" + self._key.replace("'", "").replace(" ","_")
+        self._save_prefix = "printer/model/" + self._key.replace("'", "").replace(" ","_")
         self._api_header = "x-api-key".encode()
         self._api_key = None
 
@@ -94,7 +95,7 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         self.setShortDescription(i18n_catalog.i18nc("@action:button", "Print with Repetier"))
         self.setDescription(i18n_catalog.i18nc("@properties:tooltip", "Print with Repetier"))
         self.setIconName("print")
-        self.setConnectionText(i18n_catalog.i18nc("@info:status", "Connected to Repetier on {0}").format(self._key))
+        self.setConnectionText(i18n_catalog.i18nc("@info:status", "Connected to Repetier on {0}").format(self._key.replace("'", "").replace(" ","_")))
 
         #   QNetwork manager needs to be created in advance. If we don't it can happen that it doesn't correctly
         #   hook itself into the event loop, which results in events never being fired / done.
@@ -323,7 +324,7 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
 
         self.setConnectionState(ConnectionState.connecting)
         self._update()  # Manually trigger the first update, as we don't want to wait a few secs before it starts.
-        Logger.log("d", "Connection with instance %s with url %s started", self._key, self._base_url)
+        Logger.log("d", "Connection with instance %s with url %s started", self._key.replace("'", "").replace(" ","_"), self._base_url)
         self._update_timer.start()
 
         self._last_response_time = None
@@ -336,7 +337,7 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
 
     ##  Stop requesting data from the instance
     def disconnect(self):
-        Logger.log("d", "Connection with instance %s with url %s stopped", self._key, self._base_url)
+        Logger.log("d", "Connection with instance %s with url %s stopped", self._key.replace("'", "").replace(" ","_"), self._base_url)
         self.close()
 
     def pausePrint(self):
@@ -560,7 +561,7 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                 if http_status_code == 200:
                     if not self.acceptsCommands:
                         self._setAcceptsCommands(True)
-                        self.setConnectionText(i18n_catalog.i18nc("@info:status", "Connected to Repetier on {0}").format(self._key))
+                        self.setConnectionText(i18n_catalog.i18nc("@info:status", "Connected to Repetier on {0}").format(self._key.replace("'", "").replace(" ","_")))
 
                     if self._connection_state == ConnectionState.connecting:
                         self.setConnectionState(ConnectionState.connected)
@@ -571,11 +572,11 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                         json_data = {}
                     #if "temperature" in json_data:
                     try:
-                        if "numExtruder" in json_data[self._key]:
+                        if "numExtruder" in json_data[self._key.replace("'", "").replace(" ","_")]:
                             self._number_of_extruders = 0
                             printer_state = "idle"
                             #while "tool%d" % self._num_extruders in json_data["temperature"]:
-                            self._number_of_extruders=json_data[self._key]["numExtruder"]
+                            self._number_of_extruders=json_data[self._key.replace("'", "").replace(" ","_")]["numExtruder"]
                             if self._number_of_extruders > 1:
                                 # Recreate list of printers to match the new _number_of_extruders
                                 self._createPrinterList()
@@ -587,8 +588,8 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                             # Check for hotend temperatures
                             for index in range(0, self._number_of_extruders):
                                 extruder = printer.extruders[index]
-                                if "extruder" in json_data[self._key]:                            
-                                    hotend_temperatures = json_data[self._key]["extruder"]
+                                if "extruder" in json_data[self._key.replace("'", "").replace(" ","_")]:                            
+                                    hotend_temperatures = json_data[self._key.replace("'", "").replace(" ","_")]["extruder"]
                                     #Logger.log("d", "target end temp %s", hotend_temperatures[index]["tempSet"])
                                     #Logger.log("d", "target end temp %s", hotend_temperatures[index]["tempRead"])
                                     extruder.updateTargetHotendTemperature(hotend_temperatures[index]["tempSet"])
@@ -597,8 +598,8 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                                     extruder.updateTargetHotendTemperature(0)
                                     extruder.updateHotendTemperature(0)
                         #Logger.log("d", "json_data %s", json_data[self._key])
-                        if "heatedBed" in json_data[self._key]:
-                            bed_temperatures = json_data[self._key]["heatedBed"]
+                        if "heatedBed" in json_data[self._key.replace("'", "").replace(" ","_")]:
+                            bed_temperatures = json_data[self._key.replace("'", "").replace(" ","_")]["heatedBed"]
                             actual_temperature = bed_temperatures["tempRead"] if bed_temperatures["tempRead"] is not None else -1
                             printer.updateBedTemperature(actual_temperature)
                             target_temperature = bed_temperatures["tempSet"] if bed_temperatures["tempSet"] is not None else -1                                    
@@ -606,8 +607,8 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                             #Logger.log("d", "target bed temp %s", target_temperature)
                             #Logger.log("d", "actual bed temp %s", actual_temperature)
                         else:
-                            if "heatedBeds" in json_data[self._key]:
-                                bed_temperatures = json_data[self._key]["heatedBeds"][0]
+                            if "heatedBeds" in json_data[self._key.replace("'", "").replace(" ","_")]:
+                                bed_temperatures = json_data[self._key.replace("'", "").replace(" ","_")]["heatedBeds"][0]
                                 actual_temperature = bed_temperatures["tempRead"] if bed_temperatures["tempRead"] is not None else -1
                                 printer.updateBedTemperature(actual_temperature)
                                 target_temperature = bed_temperatures["tempSet"] if bed_temperatures["tempSet"] is not None else -1                                    
@@ -622,13 +623,13 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                         Logger.log("w", "Received invalid JSON from Repetier instance.")                    
                         json_data = {}
                         printer.activePrintJob.updateState("offline")
-                        self.setConnectionText(i18n_catalog.i18nc("@info:status", "Repetier on {0} configuration is invalid").format(self._key))
+                        self.setConnectionText(i18n_catalog.i18nc("@info:status", "Repetier on {0} configuration is invalid").format(self._key.replace("'", "").replace(" ","_")))
 
                 elif http_status_code == 401:
                     printer.updateState("offline")
                     if printer.activePrintJob:
                         printer.activePrintJob.updateState("offline")
-                    self.setConnectionText(i18n_catalog.i18nc("@info:status", "Repetier on {0} does not allow access to print").format(self._key))
+                    self.setConnectionText(i18n_catalog.i18nc("@info:status", "Repetier on {0} does not allow access to print").format(self._key.replace("'", "").replace(" ","_")))
                     pass
                 elif http_status_code == 409:
                     if self._connection_state == ConnectionState.connecting:
@@ -637,7 +638,7 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                     printer.updateState("offline")
                     if printer.activePrintJob:
                         printer.activePrintJob.updateState("offline")
-                    self.setConnectionText(i18n_catalog.i18nc("@info:status", "The printer connected to Repetier on {0} is not operational").format(self._key))
+                    self.setConnectionText(i18n_catalog.i18nc("@info:status", "The printer connected to Repetier on {0} is not operational").format(self._key.replace("'", "").replace(" ","_")))
                 else:
                     printer.updateState("offline")
                     if printer.activePrintJob:
@@ -716,7 +717,7 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                 else:
                     if printer:
                         printer.activePrintJob.updateState("offline")
-                        self.setConnectionText(i18n_catalog.i18nc("@info:status", "Repetier on {0} bad response").format(self._key))
+                        self.setConnectionText(i18n_catalog.i18nc("@info:status", "Repetier on {0} bad response").format(self._key.replace("'", "").replace(" ","_")))
             elif self._api_prefix + "?a=getPrinterConfig" in reply.url().toString():  # Repetier settings dump from /settings:
                 if http_status_code == 200:
                     try:
