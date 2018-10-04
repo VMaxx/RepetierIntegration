@@ -106,9 +106,9 @@ Cura.MachineAction
                     model: manager.discoveredInstances
                     onModelChanged:
                     {
-                        var selectedKey = manager.getStoredKey();
+                        var selectedId = manager.getInstanceId();
                         for(var i = 0; i < model.length; i++) {
-                            if(model[i].getKey() == selectedKey)
+                            if(model[i].getId() == selectedId)
                             {
                                 currentIndex = i;
                                 return
@@ -210,6 +210,14 @@ Cura.MachineAction
                         onTextChanged:
                         {
                             apiCheckDelay.throttledCheck()
+                        }
+                    }
+                    Connections
+                    {
+                        target: base
+                        onSelectedInstanceChanged:
+                        {
+                            apiKey.text = manager.getApiKey(base.selectedInstance.getId())
                         }
                     }
                     Timer
@@ -381,7 +389,7 @@ Cura.MachineAction
                             {
                                 manager.applyGcodeFlavorFix(fixGcodeFlavor.checked)
                             }
-                            manager.setKey(base.selectedInstance.getKey())
+                            manager.setInstanceId(base.selectedInstance.getId())
                             manager.setApiKey(apiKey.text)
                             completed()
                         }

@@ -28,7 +28,7 @@ class RepetierOutputDevicePlugin(OutputDevicePlugin):
         Application.getInstance().globalContainerStackChanged.connect(self.reCheckConnections)
 
         # Load custom instances from preferences
-        self._preferences = Preferences.getInstance()
+        self._preferences = Application.getInstance().getPreferences()
         self._preferences.addPreference("Repetier/manual_instances", "{}")
 
         try:
@@ -69,8 +69,8 @@ class RepetierOutputDevicePlugin(OutputDevicePlugin):
             additional_properties = {
                 b"path": properties["path"].encode("utf-8"),
                 b"useHttps": b"true" if properties.get("useHttps", False) else b"false",
-                b'userName': properties["userName"].encode("utf-8"),
-                b'password': properties["password"].encode("utf-8"),
+                b'userName': properties.get("userName", "").encode("utf-8"),
+                b'password': properties.get("password", "").encode("utf-8"),
                 b"manual": b"true"
             } # These additional properties use bytearrays to mimick the output of zeroconf
             self.addInstance(name, properties["address"], properties["port"], additional_properties)
@@ -113,7 +113,8 @@ class RepetierOutputDevicePlugin(OutputDevicePlugin):
 
         for key in self._instances:
             if key == global_container_stack.getMetaDataEntry("repetier_id"):
-                self._instances[key].setApiKey(global_container_stack.getMetaDataEntry("repetier_api_key", ""))
+                api_key = global_container_stack.getMetaDataEntry("repetier_api_key", "")
+                self._instances[key].setApiKey(api_key)
                 self._instances[key].connectionStateChanged.connect(self._onInstanceConnectionStateChanged)
                 self._instances[key].connect()
             else:
@@ -123,10 +124,10 @@ class RepetierOutputDevicePlugin(OutputDevicePlugin):
     ##  Because the model needs to be created in the same thread as the QMLEngine, we use a signal.
     def addInstance(self, name, address, port, properties):
         instance = RepetierOutputDevice.RepetierOutputDevice(name, address, port, properties)
-        self._instances[instance.getKey()] = instance
+        self._instances[instance.getId()] = instance
         global_container_stack = Application.getInstance().getGlobalContainerStack()
-        if global_container_stack and instance.getKey() == global_container_stack.getMetaDataEntry("repetier_id"):
-            instance.setApiKey(global_container_stack.getMetaDataEntry("repetier_api_key", ""))
+        if global_container_stack and instance.getId() == global_container_stack.getMetaDataEntry("repetier_id"):
+            instance.setApiKey(api_key)
             instance.connectionStateChanged.connect(self._onInstanceConnectionStateChanged)			
             instance.connect()
 

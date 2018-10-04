@@ -8,23 +8,19 @@ from . import DiscoverRepetierAction
 from UM.Version import Version
 from UM.Application import Application
 from UM.Logger import Logger
-from UM.i18n import i18nCatalog
-i18n_catalog = i18nCatalog("cura")
 
 def getMetaData():
-    return {
-        "stage": {
-            "name": i18n_catalog.i18nc("@item:inmenu", "RepetierPlugin"),
-            "weight": 1
-        }
-}
+    return {}
 
 def register(app):
     if __matchVersion():
         return {
-        "output_device": RepetierOutputDevicePlugin.RepetierOutputDevicePlugin(),
-        "machine_action": DiscoverRepetierAction.DiscoverRepetierAction()
+	        "output_device": RepetierOutputDevicePlugin.RepetierOutputDevicePlugin(),
+	        "machine_action": DiscoverRepetierAction.DiscoverRepetierAction()
         }
+    else:
+        Logger.log("w", "Plugin not loaded because of a version mismatch")
+        return {}
 		
 def __matchVersion():
     cura_version = Application.getInstance().getVersion()
@@ -32,18 +28,21 @@ def __matchVersion():
         Logger.log("d", "Running Cura from source, ignoring version of the plugin")
         return True
     cura_version = Version(cura_version)
+    cura_version = Version([cura_version.getMajor(), cura_version.getMinor()])
 
     # Get version information from plugin.json
     plugin_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "plugin.json")
     try:
         with open(plugin_file_path) as plugin_file:
             plugin_info = json.load(plugin_file)
-            plugin_version = Version(plugin_info["version"])
+            minimum_cura_version = Version(plugin_info["minimum_cura_version"])
+            maximum_cura_version = Version(plugin_info["maximum_cura_version"])
     except:
         Logger.log("w", "Could not get version information for the plugin")
         return False
 
-    if plugin_version.getMajor() == cura_version.getMajor() and plugin_version.getMinor() == cura_version.getMinor():
+    if cura_version >= minimum_cura_version and cura_version <= maximum_cura_version:
         return True
     else:
+        Logger.log("d", "This version of the plugin is not compatible with this version of Cura. Please check for an update.")
         return False
