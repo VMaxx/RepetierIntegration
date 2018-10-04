@@ -12,6 +12,7 @@ from PyQt5.QtQml import QQmlComponent, QQmlContext
 from PyQt5.QtGui import QDesktopServices
 from PyQt5.QtNetwork import QNetworkRequest, QNetworkAccessManager
 
+import re
 import os.path
 import json
 import base64
@@ -26,12 +27,13 @@ class DiscoverRepetierAction(MachineAction):
         self._window = None
         self._context = None
 
+        self._application = Application.getInstance()
         self._network_plugin = None
 
         #   QNetwork manager needs to be created in advance. If we don't it can happen that it doesn't correctly
         #   hook itself into the event loop, which results in events never being fired / done.
-        self._manager = QNetworkAccessManager()
-        self._manager.finished.connect(self._onRequestFinished)
+        self._network_manager = QNetworkAccessManager()
+        self._network_manager.finished.connect(self._onRequestFinished)
 
         self._settings_reply = None
 
@@ -47,11 +49,11 @@ class DiscoverRepetierAction(MachineAction):
             Logger.logException("w", "Could not get version information for the plugin")
 
         self._user_agent = ("%s/%s %s/%s" % (
-            Application.getInstance().getApplicationName(),
-            Application.getInstance().getVersion(),
+            self._application.getApplicationName(),
+            self._application.getVersion(),
 
             "RepetierPlugin",
-            Application.getInstance().getVersion()
+            self._application.getVersion()
         )).encode()
 
 
@@ -61,15 +63,26 @@ class DiscoverRepetierAction(MachineAction):
         self._instance_supports_camera = False
         self._instance_webcamflip_y = False
 
+        # Load keys cache from preferences
+        self._preferences = self._application.getPreferences()
+        self._preferences.addPreference("Repetier/keys_cache", "")
+
+        try:
+            self._keys_cache = json.loads(self._preferences.getValue("Repetier/keys_cache"))
+        except ValueError:
+            self._keys_cache = {}
+        if not isinstance(self._keys_cache, dict):
+            self._keys_cache = {}
+
         self._additional_components = None
 
         ContainerRegistry.getInstance().containerAdded.connect(self._onContainerAdded)
-        Application.getInstance().engineCreatedSignal.connect(self._createAdditionalComponentsView)
+        self._application.engineCreatedSignal.connect(self._createAdditionalComponentsView)
 
     @pyqtSlot()
     def startDiscovery(self):
         if not self._network_plugin:
-            self._network_plugin = Application.getInstance().getOutputDeviceManager().getOutputDevicePlugin(self._plugin_id)
+            self._network_plugin = self._application.getOutputDeviceManager().getOutputDevicePlugin(self._plugin_id)
             self._network_plugin.addInstanceSignal.connect(self._onInstanceDiscovery)
             self._network_plugin.removeInstanceSignal.connect(self._onInstanceDiscovery)
             self._network_plugin.instanceListChanged.connect(self._onInstanceDiscovery)
@@ -98,7 +111,7 @@ class DiscoverRepetierAction(MachineAction):
     def _onContainerAdded(self, container):
         # Add this action as a supported action to all machine definitions
         if isinstance(container, DefinitionContainer) and container.getMetaDataEntry("type") == "machine" and container.getMetaDataEntry("supports_usb_connection"):
-            Application.getInstance().getMachineActionManager().addSupportedAction(container.getId(), self.getKey())
+            self._application.getMachineActionManager().addSupportedAction(container.getId(), self.getKey())
 
     instancesChanged = pyqtSignal()
 
@@ -112,21 +125,18 @@ class DiscoverRepetierAction(MachineAction):
             return []
 
     @pyqtSlot(str)
-    def setKey(self, key):
-        global_container_stack = Application.getInstance().getGlobalContainerStack()
+    def setInstanceId(self, key):
+        global_container_stack = self._application.getGlobalContainerStack()
         if global_container_stack:
-            if "repetier_id" in global_container_stack.getMetaData():
-                global_container_stack.setMetaDataEntry("repetier_id", key)
-            else:
-                global_container_stack.addMetaDataEntry("repetier_id", key)
+            global_container_stack.setMetaDataEntry("repetier_id", key)
 
         if self._network_plugin:
             # Ensure that the connection states are refreshed.
             self._network_plugin.reCheckConnections()
 
     @pyqtSlot(result = str)
-    def getStoredKey(self):
-        global_container_stack = Application.getInstance().getGlobalContainerStack()
+    def getInstanceId(self):
+        global_container_stack = self._application.getGlobalContainerStack()
         if global_container_stack:
             meta_data = global_container_stack.getMetaData()
             if "repetier_id" in meta_data:
@@ -143,7 +153,7 @@ class DiscoverRepetierAction(MachineAction):
         self._instance_webcamflip_y = False
         self._instance_supports_camera = False
         self.selectedInstanceSettingsChanged.emit()
-        global_container_stack = Application.getInstance().getGlobalContainerStack()
+        global_container_stack = self._application.getGlobalContainerStack()
         if global_container_stack:
              work_id = global_container_stack.getId()
 
@@ -160,7 +170,7 @@ class DiscoverRepetierAction(MachineAction):
             if basic_auth_username and basic_auth_password:
                 data = base64.b64encode(("%s:%s" % (basic_auth_username, basic_auth_password)).encode()).decode("utf-8")
                 settings_request.setRawHeader("Authorization".encode(), ("Basic %s" % data).encode())
-            self._settings_reply = self._manager.get(settings_request)
+            self._settings_reply = self._network_manager.get(settings_request)
         else:
             if self._settings_reply:
                 self._settings_reply.abort()
@@ -168,29 +178,31 @@ class DiscoverRepetierAction(MachineAction):
 
     @pyqtSlot(str)
     def setApiKey(self, api_key):
-        global_container_stack = Application.getInstance().getGlobalContainerStack()
-        if global_container_stack:
-            if "repetier_api_key" in global_container_stack.getMetaData():
-                global_container_stack.setMetaDataEntry("repetier_api_key", api_key)
-            else:
-                global_container_stack.addMetaDataEntry("repetier_api_key", api_key)
+        global_container_stack = self._application.getGlobalContainerStack()
+        if not global_container_stack:
+            return
+        global_container_stack.setMetaDataEntry("repetier_api_key", api_key)
+        self._keys_cache[self.getInstanceId()] = api_key
+        keys_cache = base64.b64encode(json.dumps(self._keys_cache).encode("ascii")).decode("ascii")
+        self._preferences.setValue("Repetier/keys_cache", keys_cache)
 
         if self._network_plugin:
             # Ensure that the connection states are refreshed.
             self._network_plugin.reCheckConnections()
 
-    apiKeyChanged = pyqtSignal()
-
     ##  Get the stored API key of this machine
     #   \return key String containing the key of the machine.
-    @pyqtProperty(str, notify = apiKeyChanged)
-    def apiKey(self):
-        global_container_stack = Application.getInstance().getGlobalContainerStack()
-        if global_container_stack:
-            Logger.log("d", "APIKEY read %s" % global_container_stack.getMetaDataEntry("repetier_api_key"))
-            return global_container_stack.getMetaDataEntry("repetier_api_key")
-        else:
+    @pyqtSlot(str, result=str)
+    def getApiKey(self, instance_id):
+        global_container_stack = self._application.getGlobalContainerStack()
+        if not global_container_stack:
             return ""
+        Logger.log("d", "APIKEY read %s" % global_container_stack.getMetaDataEntry("repetier_api_key",""))
+        if instance_id == self.getInstanceId():
+            api_key = global_container_stack.getMetaDataEntry("repetier_api_key","")
+        else:
+            api_key = self._keys_cache.get(instance_id, "")
+        return api_key
 
     selectedInstanceSettingsChanged = pyqtSignal()
 
@@ -221,15 +233,11 @@ class DiscoverRepetierAction(MachineAction):
             UM.Logger.log("w", "Could not set metadata of container %s because it was not found.", container_id)
             return False
 
-        container = containers[0]
-        if key in container.getMetaData():
-            container.setMetaDataEntry(key, value)
-        else:
-            container.addMetaDataEntry(key, value)
+        containers[0].setMetaDataEntry(key, value)
 
     @pyqtSlot(bool)
     def applyGcodeFlavorFix(self, apply_fix):
-        global_container_stack = Application.getInstance().getGlobalContainerStack()
+        global_container_stack = self._application.getGlobalContainerStack()
         if not global_container_stack:
             return
 
@@ -257,10 +265,7 @@ class DiscoverRepetierAction(MachineAction):
         material_container = global_container_stack.material
 
         if has_materials:
-            if "has_materials" in global_container_stack.getMetaData():
-                global_container_stack.setMetaDataEntry("has_materials", True)
-            else:
-                global_container_stack.addMetaDataEntry("has_materials", True)
+            global_container_stack.setMetaDataEntry("has_materials", True)
 
             # Set the material container to a sane default
             if material_container == ContainerRegistry.getInstance().getEmptyInstanceContainer():
@@ -286,12 +291,12 @@ class DiscoverRepetierAction(MachineAction):
         Logger.log("d", "Creating additional ui components for Repetier-connected printers.")
 
         path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "RepetierComponents.qml")
-        self._additional_components = Application.getInstance().createQmlComponent(path, {"manager": self})
+        self._additional_components = self._application.createQmlComponent(path, {"manager": self})
         if not self._additional_components:
             Logger.log("w", "Could not create additional components for Repetier-connected printers.")
             return
 
-        Application.getInstance().addAdditionalComponent("monitorButtons", self._additional_components.findChild(QObject, "openRepetierButton"))
+        self._application.addAdditionalComponent("monitorButtons", self._additional_components.findChild(QObject, "openRepetierButton"))
 
 
     ##  Handler for all requests that have finished.
@@ -321,7 +326,8 @@ class DiscoverRepetierAction(MachineAction):
 
                     if "webcam" in json_data and "dynamicUrl" in json_data["webcam"]:
                         Logger.log("d", "DiscoverRepetierAction: Checking streamurl")
-                        stream_url = json_data["webcam"]["dynamicUrl"]
+                        Logger.log("d", "DiscoverRepetierAction: %s", reply.url())
+                        stream_url = json_data["webcam"]["dynamicUrl"].replace("127.0.0.1",re.findall( r'[0-9]+(?:\.[0-9]+){3}', reply.url().toString())[0])
                         Logger.log("d", "DiscoverRepetierAction: stream_url: %s",stream_url)
                         Logger.log("d", "DiscoverRepetierAction: reply_url: %s",reply.url())
                         if stream_url: #not empty string or None
@@ -330,8 +336,8 @@ class DiscoverRepetierAction(MachineAction):
                         Logger.log("d", "DiscoverRepetierAction: webcams: %s",len(json_data["webcams"]))
                         if len(json_data["webcams"])>0:
                             if "dynamicUrl" in json_data["webcams"][0]:
-                                Logger.log("d", "DiscoverRepetierAction: Checking streamurl")
-                                stream_url = json_data["webcams"][0]["dynamicUrl"]
+                                Logger.log("d", "DiscoverRepetierAction: Checking streamurl")                                
+                                stream_url = json_data["webcams"][0]["dynamicUrl"].replace("127.0.0.1",re.findall( r'[0-9]+(?:\.[0-9]+){3}', reply.url().toString())[0])
                                 Logger.log("d", "DiscoverRepetierAction: stream_url: %s",stream_url)
                                 Logger.log("d", "DiscoverRepetierAction: reply_url: %s",reply.url())
                                 if stream_url: #not empty string or None
