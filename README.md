@@ -1,14 +1,18 @@
 # RepetierPlugin
-# Version 3.5.0
+# Version 3.6.0 WORK IN PROGRESS
 # Shane Bumpurs
 Cura plugin which enables printing directly to Repetier and monitoring the progress
 
 This plugin is basically a copy of the Octoprint plugin with the necessary changes to work with repetier server.
 
+Current Issue
+-------------
+Webcam isn't working yet
+
 Installation
 ----
 * Manually:
-  - Make sure your Cura version is 3.5 
+  - Make sure your Cura version is 3.6 
   - Download or clone the repository into [Cura installation folder]/plugins/RepetierPlugin
     or in the plugins folder inside the configuration folder. The configuration folder can be
     found via Help -> Show Configuration Folder inside Cura.

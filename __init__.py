@@ -1,18 +1,21 @@
-# Copyright (c) 2015 Ultimaker B.V.
-# Cura is released under the terms of the AGPLv3 or higher.
+# Copyright (c) 2018 Aldo Hoeben / fieldOfView & Shane Bumpurs
+# RepetierPlugin is released under the terms of the AGPLv3 or higher.
 import os, json
 
 from . import RepetierOutputDevicePlugin
 from . import DiscoverRepetierAction
+from . import NetworkMJPGImage
 
 from UM.Version import Version
 from UM.Application import Application
 from UM.Logger import Logger
 
+from PyQt5.QtQml import qmlRegisterType
 def getMetaData():
     return {}
 
 def register(app):
+    qmlRegisterType(NetworkMJPGImage.NetworkMJPGImage, "RepetierPlugin", 1, 0, "NetworkMJPGImage")
     if __matchVersion():
         return {
 	        "output_device": RepetierOutputDevicePlugin.RepetierOutputDevicePlugin(),

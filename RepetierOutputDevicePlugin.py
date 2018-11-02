@@ -5,8 +5,9 @@ from zeroconf import Zeroconf, ServiceBrowser, ServiceStateChange, ServiceInfo
 from UM.Signal import Signal, signalemitter
 from UM.Application import Application
 from UM.Logger import Logger
-from UM.Preferences import Preferences
+from UM.Util import parseBool
 
+from PyQt5.QtCore import QTimer
 import time
 import json
 import re
@@ -40,6 +41,11 @@ class RepetierOutputDevicePlugin(OutputDevicePlugin):
 
         self._name_regex = re.compile("Repetier instance (\".*\"\.|on )(.*)\.")
 
+        self._keep_alive_timer = QTimer()
+        self._keep_alive_timer.setInterval(2000)
+        self._keep_alive_timer.setSingleShot(False)
+        self._keep_alive_timer.timeout.connect(self._keepDiscoveryAlive)
+
     addInstanceSignal = Signal()
     removeInstanceSignal = Signal()
     instanceListChanged = Signal()
@@ -47,6 +53,7 @@ class RepetierOutputDevicePlugin(OutputDevicePlugin):
     ##  Start looking for devices on network.
     def start(self):
         self.startDiscovery()
+        self._keep_alive_timer.start()
 
     def startDiscovery(self):
         if self._browser:
@@ -74,6 +81,11 @@ class RepetierOutputDevicePlugin(OutputDevicePlugin):
                 b"manual": b"true"
             } # These additional properties use bytearrays to mimick the output of zeroconf
             self.addInstance(name, properties["address"], properties["port"], additional_properties)
+
+    def _keepDiscoveryAlive(self):
+        if not self._browser or not self._browser.is_alive():
+            Logger.log("w", "Zeroconf discovery has died, restarting discovery of Repetier instances.")
+            self.startDiscovery()
 
     def addManualInstance(self, name, address, port, path, useHttps = False, userName = "", password = ""):
         self._manual_instances[name] = {"address": address, "port": port, "path": path, "useHttps": useHttps, "userName": userName, "password": password}
@@ -115,6 +127,7 @@ class RepetierOutputDevicePlugin(OutputDevicePlugin):
             if key == global_container_stack.getMetaDataEntry("repetier_id"):
                 api_key = global_container_stack.getMetaDataEntry("repetier_api_key", "")
                 self._instances[key].setApiKey(api_key)
+                self._instances[key].setShowCamera(parseBool(global_container_stack.getMetaDataEntry("Repetier_show_camera", "false")))
                 self._instances[key].connectionStateChanged.connect(self._onInstanceConnectionStateChanged)
                 self._instances[key].connect()
             else:

@@ -3,6 +3,8 @@ from UM.Logger import Logger
 from UM.Signal import signalemitter
 from UM.Message import Message
 from UM.Util import parseBool
+from UM.Mesh.MeshWriter import MeshWriter
+from UM.PluginRegistry import PluginRegistry
 
 from cura.CuraApplication import CuraApplication
 
@@ -10,7 +12,6 @@ from cura.PrinterOutputDevice import PrinterOutputDevice, ConnectionState
 from cura.PrinterOutput.NetworkedPrinterOutputDevice import NetworkedPrinterOutputDevice
 from cura.PrinterOutput.PrinterOutputModel import PrinterOutputModel
 from cura.PrinterOutput.PrintJobOutputModel import PrintJobOutputModel
-from cura.PrinterOutput.NetworkCamera import NetworkCamera
 
 from cura.PrinterOutput.GenericOutputController import GenericOutputController
 
@@ -24,10 +25,13 @@ import re
 import datetime
 from time import time
 import base64
+from io import StringIO
 
-from typing import Any, Callable, Dict, List, Optional, Union
-from UM.Scene.SceneNode import SceneNode #For typing.
-from UM.FileHandler.FileHandler import FileHandler #For typing.
+from typing import cast, Any, Callable, Dict, List, Optional, Union
+MYPY = False
+if MYPY:
+    from UM.Scene.SceneNode import SceneNode #For typing.
+    from UM.FileHandler.FileHandler import FileHandler #For typing.
 
 i18n_catalog = i18nCatalog("cura")
 
@@ -46,7 +50,8 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         self._id = instance_id
         self._properties = properties  # Properties dict as provided by zero conf
 
-        self._gcode = [] # type: List[str]
+        self._gcode_stream = StringIO()
+
         self._auto_print = True
         self._forced_queue = False
 
@@ -70,7 +75,7 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
             CuraApplication.getInstance().getApplicationName(),
             CuraApplication.getInstance().getVersion(),
             "RepetierPlugin",
-            CuraApplication.getInstance().getVersion()
+            plugin_version
         ))
 
         #base_url + "printer/api/" + self._key +
@@ -98,7 +103,7 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         self._monitor_view_qml_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "MonitorItem.qml")
 
         name = self._id
-        matches = re.search(r"^\"(.*)\"\._octoprint\._tcp.local$", name)
+        matches = re.search(r"^\"(.*)\"\._Repetier\._tcp.local$", name)
         if matches:
             name = matches.group(1)
         #Logger.log("d", "NAME IS: %s", name)
@@ -127,6 +132,7 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         self._update_timer.setSingleShot(False)
         self._update_timer.timeout.connect(self._update)
 
+        self._show_camera = False
         self._camera_mirror = False
         self._camera_rotation = 0
         self._camera_url = ""
@@ -175,8 +181,6 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         return self._address
 
     ## IP address of this instance
-    #  Overridden from NetworkedPrinterOutputDevice because OctoPrint does not
-    #  send the ip address with zeroconf
     @pyqtProperty(str, constant=True)
     def address(self) -> str:
         return self._address
@@ -204,6 +208,23 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
             "mirror": self._camera_mirror,
             "rotation": self._camera_rotation,
         }
+
+    cameraUrlChanged = pyqtSignal()
+
+    @pyqtProperty("QUrl", notify = cameraUrlChanged)
+    def cameraUrl(self) -> QUrl:
+        return QUrl(self._camera_url)
+
+    def setShowCamera(self, show_camera: bool) -> None:
+        if show_camera != self._show_camera:
+            self._show_camera = show_camera
+            self.showCameraChanged.emit()
+
+    showCameraChanged = pyqtSignal()
+
+    @pyqtProperty(bool, notify = showCameraChanged)
+    def showCamera(self) -> bool:
+        return self._show_camera
 
     def _update(self) -> None:
         ## Request 'general' printer data
@@ -237,16 +258,15 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
             self._error_message.hide()
         self._update_timer.stop()
 
-    def requestWrite(self, nodes: List[SceneNode], file_name: Optional[str] = None, limit_mimetypes: bool = False, file_handler: Optional[FileHandler] = None, **kwargs: str) -> None:
+    def requestWrite(self, nodes: List["SceneNode"], file_name: Optional[str] = None, limit_mimetypes: bool = False, file_handler: Optional["FileHandler"] = None, **kwargs: str) -> None:
         self.writeStarted.emit(self)
 
-        active_build_plate = CuraApplication.getInstance().getMultiBuildPlateModel().activeBuildPlate
-        scene = CuraApplication.getInstance().getController().getScene()
-        gcode_dict = getattr(scene, "gcode_dict", None)
-        if not gcode_dict:
+        # Get the g-code through the GCodeWriter plugin
+        # This produces the same output as "Save to File", adding the print settings to the bottom of the file
+        gcode_writer = cast(MeshWriter, PluginRegistry.getInstance().getPluginObject("GCodeWriter"))
+        if not gcode_writer.write(self._gcode_stream, None):
+            Logger.log("e", "GCodeWrite failed: %s" % gcode_writer.getInformation())
             return
-        self._gcode = gcode_dict.get(active_build_plate, None)
-
         self.startPrint()
 
     ##  Start requesting data from the instance
@@ -346,19 +366,9 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                 pass
 
         self._progress_message = Message(i18n_catalog.i18nc("@info:status", "Sending data to Repetier"), 0, False, -1)
-        self._progress_message.addAction("Cancel", i18n_catalog.i18nc("@action:button", "Cancel"), None, "")
+        self._progress_message.addAction("Cancel", i18n_catalog.i18nc("@action:button", "Cancel"), "", "")
         self._progress_message.actionTriggered.connect(self._cancelSendGcode)
         self._progress_message.show()
-
-        ## Mash the data into single string
-        single_string_file_data = ""
-        last_process_events = time()
-        for line in self._gcode:
-            single_string_file_data += line
-            if time() > last_process_events + 0.05:
-                # Ensure that the GUI keeps updated at least 20 times per second.
-                QCoreApplication.processEvents()
-                last_process_events = time()
 
         job_name = CuraApplication.getInstance().getPrintInformation().jobName.strip()
         Logger.log("d", "Print job: [%s]", job_name)
@@ -383,7 +393,7 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
             
         post_part = QHttpPart()
         post_part.setHeader(QNetworkRequest.ContentDispositionHeader, "form-data; name=\"file\"; filename=\"%s\"" % file_name)
-        post_part.setBody(single_string_file_data.encode())
+        post_part.setBody(self._gcode_stream.getvalue().encode())
         post_parts.append(post_part)
 
         destination = "local"
@@ -406,7 +416,7 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
             self._progress_message.hide()
             Logger.log("e", "An exception occurred in network connection: %s" % str(e))
 
-        self._gcode = []
+        self._gcode_stream = StringIO()
 
     def _cancelSendGcode(self, message_id: Optional[str] = None, action_id: Optional[str] = None) -> None:
         if self._post_reply:
@@ -687,11 +697,10 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                         else:
                             Logger.log("w", "Unusable stream url received: %s", stream_url)
                             self._camera_url = ""
-                        Logger.log("d", "Set Repetier camera url to %s", self._camera_url)
-                        if self._camera_url != "" and len(self._printers) > 0:
-                            self._printers[0].setCamera(NetworkCamera(self._camera_url))
                         if parseBool(global_container_stack.getMetaDataEntry("repetier_webcamflip_y", False)):
                             self._camera_rotation = 180
+                        Logger.log("d", "Set Repetier camera url to %s", self._camera_url)
+                        self.cameraUrlChanged.emit()
                         self._camera_mirror = False
                         #self.cameraOrientationChanged.emit()
                     if "webcams" in json_data:
@@ -716,8 +725,6 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                                     Logger.log("w", "Unusable stream url received: %s", stream_url)
                                     self._camera_url = ""
                                 Logger.log("d", "Set Repetier camera url to %s", self._camera_url)
-                                if self._camera_url != "" and len(self._printers) > 0:
-                                    self._printers[0].setCamera(NetworkCamera(self._camera_url))
                                 if parseBool(global_container_stack.getMetaDataEntry("repetier_webcamflip_y", False)):
                                     self._camera_rotation = 180
                                 self._camera_mirror = False
@@ -730,7 +737,8 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                     pass  # TODO: Handle errors
 
                 reply.uploadProgress.disconnect(self._onUploadProgress)
-                self._progress_message.hide()
+                if self._progress_message:
+                    self._progress_message.hide()
                 global_container_stack = Application.getInstance().getGlobalContainerStack()
                 if self._forced_queue or not self._auto_print:
                     location = reply.header(QNetworkRequest.LocationHeader)
@@ -754,16 +762,27 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         else:
             Logger.log("d", "RepetierOutputDevice got an unhandled operation %s", reply.operation())
 
-
+        if not error_handled and http_status_code >= 400:
+            # Received an error reply
+            error_string = reply.attribute(QNetworkRequest.HttpReasonPhraseAttribute)
+            if self._error_message:
+                self._error_message.hide()
+            self._error_message = Message(i18n_catalog.i18nc("@info:status", "Repetier returned an error: {0}.").format(error_string))
+            self._error_message.show()
+            return
     def _onUploadProgress(self, bytes_sent: int, bytes_total: int) -> None:
+        if not self._progress_message:
+            return
+
         if bytes_total > 0:
             # Treat upload progress as response. Uploading can take more than 10 seconds, so if we don't, we can get
             # timeout responses if this happens.
             self._last_response_time = time()
 
             progress = bytes_sent / bytes_total * 100            
+            previous_progress = self._progress_message.getProgress()
             if progress < 100:
-                if progress > self._progress_message.getProgress():
+                if previous_progress is not None and progress > previous_progress:
                     self._progress_message.setProgress(progress)
             else:
                 self._progress_message.hide()
@@ -774,8 +793,6 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
 
     def _createPrinterList(self) -> None:
         printer = PrinterOutputModel(output_controller=self._output_controller, number_of_extruders=self._number_of_extruders)
-        if self._camera_url != "":
-            printer.setCamera(NetworkCamera(self._camera_url))
         printer.updateName(self.name)
         self._printers = [printer]
         self.printersChanged.emit()
