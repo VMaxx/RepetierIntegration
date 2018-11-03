@@ -1,8 +1,8 @@
 {
     "name": "Repetier connection",
     "author": "VMaxx - c/o fieldOfView",
-    "version": "3.5.1",    
-    "minimum_cura_version": "3.5",
+    "version": "3.6",    
+    "minimum_cura_version": "3.6",
     "maximum_cura_version": "3.6",
     "description": "Enables network printing and monitoring to Repetier",
     "api": 5,
