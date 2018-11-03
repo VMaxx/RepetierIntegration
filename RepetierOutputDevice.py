@@ -438,8 +438,9 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
     # Send gcode commands that are queued in quick succession as a single batch
     def _sendQueuedGcode(self) -> None:
         if self._queued_gcode_commands:
-            self._sendCommandToApi("send", "&data={\"cmd\":\"" + self._queued_gcode_commands + "\"}")
-            #Logger.log("d", "Sent gcode command to Repetier instance: %s", self._queued_gcode_commands)
+            for gcode in self._queued_gcode_commands:
+                self._sendCommandToApi("send", "&data={\"cmd\":\"" + gcode + "\"}")
+                Logger.log("d", "Sent gcode command to Repetier instance: %s", gcode)
             self._queued_gcode_commands = []
 
     def _sendJobCommand(self, command: str) -> None:
@@ -466,6 +467,18 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         #Logger.log("d", "_sendCommandToAPI: %s", data)
         self._command_reply = self._manager.post(command_request, data.encode())
 
+    ## Overloaded from NetworkedPrinterOutputDevice.post() to backport https://github.com/Ultimaker/Cura/pull/4678
+    def post(self, target: str, data: str, on_finished: Optional[Callable[[QNetworkReply], None]], on_progress: Callable = None) -> None:
+        self._validateManager()
+        request = self._createEmptyRequest(target)
+        self._last_request_time = time()
+        if self._manager is not None:
+            reply = self._manager.post(request, data.encode())
+            if on_progress is not None:
+                reply.uploadProgress.connect(on_progress)
+            self._registerOnFinishedCallback(reply, on_finished)
+        else:
+            Logger.log("e", "Could not find manager.")
 
         ##  Handler for all requests that have finished.
     def _onRequestFinished(self, reply: QNetworkReply) -> None:
@@ -728,7 +741,7 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                                 if parseBool(global_container_stack.getMetaDataEntry("repetier_webcamflip_y", False)):
                                     self._camera_rotation = 180
                                 self._camera_mirror = False
-                                self.cameraOrientationChanged.emit()
+                                #self.cameraOrientationChanged.emit()
         elif reply.operation() == QNetworkAccessManager.PostOperation:
             if self._api_prefix + "?a=listModels" in reply.url().toString():  # Result from /files command:
                 if http_status_code == 201:

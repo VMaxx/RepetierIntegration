@@ -89,7 +89,7 @@ class NetworkMJPGImage(QQuickPaintedItem):
             Logger.log("w", "Unable to start camera stream without target!")
             return
         self._started = True
-
+        Logger.log("w", "MJPEG starting stream...")
         self._image_request = QNetworkRequest(self._source_url)
         if self._network_manager is None:
             self._network_manager = QNetworkAccessManager()
@@ -99,6 +99,7 @@ class NetworkMJPGImage(QQuickPaintedItem):
 
     @pyqtSlot()
     def stop(self) -> None:
+        Logger.log("w", "MJPEG stopping stream...")	
         self._stream_buffer = QByteArray()
         self._stream_buffer_start_index = -1
 
@@ -128,11 +129,11 @@ class NetworkMJPGImage(QQuickPaintedItem):
         if self._image_reply is None:
             return
         self._stream_buffer += self._image_reply.readAll()
-        if len(self._stream_buffer) > 5000000:  # No single camera frame should be 2 Mb or larger
-            Logger.log("w", "MJPEG buffer exceeds reasonable size. Restarting stream...%d",len(self._stream_buffer))
-            self.stop()  # resets stream buffer and start index
-            self.start()
-            return
+#        if len(self._stream_buffer) > 2000000:  # No single camera frame should be 2 Mb or larger
+#            Logger.log("w", "MJPEG buffer exceeds reasonable size. Restarting stream...%d",len(self._stream_buffer))
+#            self.stop()  # resets stream buffer and start index
+#            self.start()
+#            return
 
         if self._stream_buffer_start_index == -1:
             self._stream_buffer_start_index = self._stream_buffer.indexOf(b'\xff\xd8')

@@ -127,7 +127,7 @@ class RepetierOutputDevicePlugin(OutputDevicePlugin):
             if key == global_container_stack.getMetaDataEntry("repetier_id"):
                 api_key = global_container_stack.getMetaDataEntry("repetier_api_key", "")
                 self._instances[key].setApiKey(api_key)
-                self._instances[key].setShowCamera(parseBool(global_container_stack.getMetaDataEntry("Repetier_show_camera", "false")))
+                self._instances[key].setShowCamera(parseBool(global_container_stack.getMetaDataEntry("repetier_show_camera", "false")))
                 self._instances[key].connectionStateChanged.connect(self._onInstanceConnectionStateChanged)
                 self._instances[key].connect()
             else:

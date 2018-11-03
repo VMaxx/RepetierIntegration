@@ -1,13 +1,10 @@
 # RepetierPlugin
-# Version 3.6.0 WORK IN PROGRESS
+# Version 3.6.0
 # Shane Bumpurs
 Cura plugin which enables printing directly to Repetier and monitoring the progress
 
 This plugin is basically a copy of the Octoprint plugin with the necessary changes to work with repetier server.
 
-Current Issue
--------------
-Webcam isn't working yet
 
 Installation
 ----
@@ -37,4 +34,5 @@ How to use
   You must choose MJPG Stream alone and not use the default.
   ![alt text](https://user-images.githubusercontent.com/12956626/42852880-a54c0d1c-89f8-11e8-8541-bf9d691cbae4.jpg "Webcam Config")
   
-  
+ Latest change:
+	Jog buttons should now (sort of) work.  The relative movement gets reset on occassion for whatever reason.
