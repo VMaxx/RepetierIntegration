@@ -1,4 +1,4 @@
-project(RepetierPlugin NONE)
+project(RepetierIntegration NONE)
 cmake_minimum_required(VERSION 2.8.12)
 
 install(FILES
@@ -9,8 +9,9 @@ install(FILES
     RepetierComponents.qml
     RepetierOutputDevice.py
     RepetierOutputDevicePlugin.py
+    NetworkMJPGImage.py
     MonitorItem.qml
     LICENSE
     README.md
-    DESTINATION lib/cura/plugins/RepetierPlugin
+    DESTINATION lib/cura/plugins/RepetierIntegration
 )

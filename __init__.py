@@ -1,5 +1,5 @@
 # Copyright (c) 2018 Aldo Hoeben / fieldOfView & Shane Bumpurs
-# RepetierPlugin is released under the terms of the AGPLv3 or higher.
+# RepetierIntegration is released under the terms of the AGPLv3 or higher.
 import os, json
 
 from . import RepetierOutputDevicePlugin
@@ -15,7 +15,7 @@ def getMetaData():
     return {}
 
 def register(app):
-    qmlRegisterType(NetworkMJPGImage.NetworkMJPGImage, "RepetierPlugin", 1, 0, "NetworkMJPGImage")
+    qmlRegisterType(NetworkMJPGImage.NetworkMJPGImage, "RepetierIntegration", 1, 0, "NetworkMJPGImage")
     if __matchVersion():
         return {
 	        "output_device": RepetierOutputDevicePlugin.RepetierOutputDevicePlugin(),

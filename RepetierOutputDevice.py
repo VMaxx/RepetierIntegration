@@ -74,7 +74,7 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         self._user_agent = ("%s/%s %s/%s" % (
             CuraApplication.getInstance().getApplicationName(),
             CuraApplication.getInstance().getVersion(),
-            "RepetierPlugin",
+            "RepetierIntegration",
             plugin_version
         ))
 

@@ -52,7 +52,7 @@ class DiscoverRepetierAction(MachineAction):
             self._application.getApplicationName(),
             self._application.getVersion(),
 
-            "RepetierPlugin",
+            "RepetierIntegration",
             self._application.getVersion()
         )).encode()
 

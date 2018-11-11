@@ -1,11 +1,11 @@
 import QtQuick 2.2
-import RepetierPlugin 1.0 as RepetierPlugin
+import RepetierIntegration 1.0 as RepetierIntegration
 
 Component
 {
     Item
     {
-        RepetierPlugin.NetworkMJPGImage
+        RepetierIntegration.NetworkMJPGImage
         {
             id: cameraImage
             visible: OutputDevice != null ? OutputDevice.showCamera : false
