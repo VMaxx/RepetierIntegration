@@ -453,12 +453,12 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
             self._manager.get(self._createEmptyRequest("stopJob"))
         #Logger.log("d", "Sent job command to Repetier instance: %s %s" % (command,self.jobState))
 
-    def _sendCommandToApi(self, end_point, commands):	
+    def _sendCommandToApi(self, end_point, commands):        
         command_request = QNetworkRequest(QUrl(self._api_url + "?a=" + end_point))
         command_request.setRawHeader(self._user_agent_header, self._user_agent.encode())
         command_request.setRawHeader(self._api_header, self._api_key)
         if self._basic_auth_data:
-            command_request.setRawHeader(self._basic_auth_header, self._basic_auth_data)	        
+            command_request.setRawHeader(self._basic_auth_header, self._basic_auth_data)                
         command_request.setHeader(QNetworkRequest.ContentTypeHeader, "application/json")
         if isinstance(commands, list):
             data = json.dumps({"commands": commands})
@@ -640,7 +640,7 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                                 printer.updateActivePrintJob(print_job)
                         if "paused" in json_data[0]:
                             if json_data[0]["paused"] != False:
-                                print_job_state = "paused"								
+                                print_job_state = "paused"                                                                
                         #printer.updateState(printer_state)
                         #if "state" in json_data:
                         #    if json_data["state"]["flags"]["error"]:
@@ -711,7 +711,16 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                             Logger.log("w", "Unusable stream url received: %s", stream_url)
                             self._camera_url = ""
                         if parseBool(global_container_stack.getMetaDataEntry("repetier_webcamflip_y", False)):
+                            self._camera_mirror = True
+                        else:
+                            self._camera_mirror = False
+                        if parseBool(global_container_stack.getMetaDataEntry("repetier_webcamflip_x", False)):
                             self._camera_rotation = 180
+                            self._camera_mirror = True
+                        if parseBool(global_container_stack.getMetaDataEntry("repetier_webcamrot_90", False)):
+                            self._camera_rotation = 90
+                        if parseBool(global_container_stack.getMetaDataEntry("repetier_webcamrot_270", False)):
+                            self._camera_rotation = 270
                         Logger.log("d", "Set Repetier camera url to %s", self._camera_url)
                         self.cameraUrlChanged.emit()
                         self._camera_mirror = False
@@ -739,8 +748,16 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                                     self._camera_url = ""
                                 Logger.log("d", "Set Repetier camera url to %s", self._camera_url)
                                 if parseBool(global_container_stack.getMetaDataEntry("repetier_webcamflip_y", False)):
+                                    self._camera_mirror = True
+                                else:
+                                    self._camera_mirror = False
+                                if parseBool(global_container_stack.getMetaDataEntry("repetier_webcamflip_x", False)):
                                     self._camera_rotation = 180
-                                self._camera_mirror = False
+                                    self._camera_mirror = True
+                                if parseBool(global_container_stack.getMetaDataEntry("repetier_webcamrot_90", False)):
+                                    self._camera_rotation = 90
+                                if parseBool(global_container_stack.getMetaDataEntry("repetier_webcamrot_270", False)):
+                                    self._camera_rotation = 270                                
                                 #self.cameraOrientationChanged.emit()
         elif reply.operation() == QNetworkAccessManager.PostOperation:
             if self._api_prefix + "?a=listModels" in reply.url().toString():  # Result from /files command:

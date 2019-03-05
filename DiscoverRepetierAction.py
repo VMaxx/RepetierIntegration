@@ -62,6 +62,9 @@ class DiscoverRepetierAction(MachineAction):
         self._instance_supports_sd = False
         self._instance_supports_camera = False
         self._instance_webcamflip_y = False
+        self._instance_webcamflip_x = False
+        self._instance_webcamrot90 = False
+        self._instance_webcamrot270 = False
 
         # Load keys cache from preferences
         self._preferences = self._application.getPreferences()
@@ -151,6 +154,9 @@ class DiscoverRepetierAction(MachineAction):
         self._instance_api_key_accepted = False
         self._instance_supports_sd = False
         self._instance_webcamflip_y = False
+        self._instance_webcamflip_x = False
+        self._instance_webcamrot90 = False
+        self._instance_webcamrot270 = False
         self._instance_supports_camera = False
         self.selectedInstanceSettingsChanged.emit()
         global_container_stack = self._application.getGlobalContainerStack()
@@ -221,6 +227,15 @@ class DiscoverRepetierAction(MachineAction):
     @pyqtProperty(bool, notify = selectedInstanceSettingsChanged)
     def instanceWebcamFlipY(self):
         return self._instance_webcamflip_y
+    @pyqtProperty(bool, notify = selectedInstanceSettingsChanged)
+    def instanceWebcamFlipX(self):
+        return self._instance_webcamflip_x
+    @pyqtProperty(bool, notify = selectedInstanceSettingsChanged)
+    def instanceWebcamRot90(self):
+        return self._instance_webcamrot90
+    @pyqtProperty(bool, notify = selectedInstanceSettingsChanged)
+    def instanceWebcamRot270(self):
+        return self._instance_webcamrot270
 
     @pyqtProperty(bool, notify = selectedInstanceSettingsChanged)
     def instanceSupportsCamera(self):

@@ -336,6 +336,39 @@ Cura.MachineAction
                     }
                     CheckBox
                     {
+                        id: flipXCheckBox
+                        text: catalog.i18nc("@label", "Flip Webcam X")
+                        enabled: manager.instanceSupportsCamera
+                        checked: manager.instanceApiKeyAccepted && Cura.ContainerManager.getContainerMetaDataEntry(Cura.MachineManager.activeMachineId, "repetier_webcamflip_x") == "true"
+                        onClicked:
+                        {
+                            manager.setContainerMetaDataEntry(Cura.MachineManager.activeMachineId, "repetier_webcamflip_x", String(checked))
+                        }
+                    }
+                    CheckBox
+                    {
+                        id: rot90CheckBox
+                        text: catalog.i18nc("@label", "Rotate Webcam 90")
+                        enabled: manager.instanceSupportsCamera
+                        checked: manager.instanceApiKeyAccepted && Cura.ContainerManager.getContainerMetaDataEntry(Cura.MachineManager.activeMachineId, "repetier_webcamrot_90") == "true"
+                        onClicked:
+                        {
+                            manager.setContainerMetaDataEntry(Cura.MachineManager.activeMachineId, "repetier_webcamrot_90", String(checked))
+                        }
+                    }
+                    CheckBox
+                    {
+                        id: rot270CheckBox
+                        text: catalog.i18nc("@label", "Rotate Webcam 270")
+                        enabled: manager.instanceSupportsCamera
+                        checked: manager.instanceApiKeyAccepted && Cura.ContainerManager.getContainerMetaDataEntry(Cura.MachineManager.activeMachineId, "repetier_webcamrot_270") == "true"
+                        onClicked:
+                        {
+                            manager.setContainerMetaDataEntry(Cura.MachineManager.activeMachineId, "repetier_webcamrot_270", String(checked))
+                        }
+                    }
+                    CheckBox
+                    {
                         id: storeOnSdCheckBox
                         text: catalog.i18nc("@label", "Store G-code on the printer SD card")
                         enabled: manager.instanceSupportsSd
