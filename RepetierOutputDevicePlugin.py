@@ -1,7 +1,7 @@
 from UM.OutputDevice.OutputDevicePlugin import OutputDevicePlugin
 from . import RepetierOutputDevice
 
-from zeroconf import Zeroconf, ServiceBrowser, ServiceStateChange, ServiceInfo
+from .zeroconf import Zeroconf, ServiceBrowser, ServiceStateChange, ServiceInfo
 from UM.Signal import Signal, signalemitter
 from UM.Application import Application
 from UM.Logger import Logger
@@ -11,6 +11,11 @@ from PyQt5.QtCore import QTimer
 import time
 import json
 import re
+
+
+from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING
+if TYPE_CHECKING:
+    from cura.PrinterOutput.PrinterOutputModel import PrinterOutputModel
 
 ##      This plugin handles the connection detection & creation of output device objects for Repetier-connected printers.
 #       Zero-Conf is used to detect printers, which are saved in a dict.
@@ -162,7 +167,7 @@ class RepetierOutputDevicePlugin(OutputDevicePlugin):
             self.getOutputDeviceManager().removeOutputDevice(key)
 
     ##  Handler for zeroConf detection
-    def _onServiceChanged(self, zeroconf, service_type, name, state_change):
+    def _onServiceChanged(self, zeroconf: Zeroconf, service_type, name, state_change):
         if state_change == ServiceStateChange.Added:
             key = name
             result = self._name_regex.match(name)

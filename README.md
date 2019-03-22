@@ -1,5 +1,5 @@
 # RepetierIntegration
-# Version 3.6.0
+# Version 4.0
 # Shane Bumpurs
 Cura plugin which enables printing directly to Repetier and monitoring the progress
 The name has changed to RepetierIntegration in the plugin folder.
@@ -9,7 +9,7 @@ This plugin is basically a copy of the Octoprint plugin with the necessary chang
 Installation
 ----
 * Manually:
-  - Make sure your Cura version is 3.6 
+  - Make sure your Cura version is 4.0
   - Download or clone the repository into [Cura installation folder]/plugins/RepetierIntegration
     or in the plugins folder inside the configuration folder. The configuration folder can be
     found via Help -> Show Configuration Folder inside Cura.
@@ -34,5 +34,4 @@ How to use
   You must choose MJPG Stream alone and not use the default.
   ![alt text](https://user-images.githubusercontent.com/12956626/42852880-a54c0d1c-89f8-11e8-8541-bf9d691cbae4.jpg "Webcam Config")
   
- Latest change:
-	Jog buttons should now (sort of) work.  The relative movement gets reset on occassion for whatever reason.
+ 

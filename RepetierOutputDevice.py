@@ -1,3 +1,4 @@
+
 from UM.i18n import i18nCatalog
 from UM.Logger import Logger
 from UM.Signal import signalemitter
@@ -26,16 +27,31 @@ import datetime
 from time import time
 import base64
 from io import StringIO
+from enum import IntEnum
 
-from typing import cast, Any, Callable, Dict, List, Optional, Union
-MYPY = False
-if MYPY:
+from typing import cast, Any, Callable, Dict, List, Optional, Union, TYPE_CHECKING
+if TYPE_CHECKING:
     from UM.Scene.SceneNode import SceneNode #For typing.
     from UM.FileHandler.FileHandler import FileHandler #For typing.
 
 i18n_catalog = i18nCatalog("cura")
 
-
+##  The current processing state of the backend.
+#   This shadows PrinterOutputDevice.ConnectionState because its spelling changed
+#   between Cura 4.0 beta 1 and beta 2
+class UnifiedConnectionState(IntEnum):
+    try:
+        Closed = ConnectionState.Closed
+        Connecting = ConnectionState.Connecting
+        Connected = ConnectionState.Connected
+        Busy = ConnectionState.Busy
+        Error = ConnectionState.Error
+    except AttributeError:
+        Closed = ConnectionState.closed          # type: ignore
+        Connecting = ConnectionState.connecting  # type: ignore
+        Connected = ConnectionState.connected    # type: ignore
+        Busy = ConnectionState.busy              # type: ignore
+        Error = ConnectionState.error            # type: ignore
 ##  Repetier connected (wifi / lan) printer using the Repetier API
 @signalemitter
 class RepetierOutputDevice(NetworkedPrinterOutputDevice):
@@ -251,7 +267,7 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         return request
 
     def close(self) -> None:
-        self.setConnectionState(ConnectionState.closed)
+        self.setConnectionState(cast(ConnectionState, UnifiedConnectionState.Closed))
         if self._progress_message:
             self._progress_message.hide()
         if self._error_message:
@@ -273,7 +289,7 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
     def connect(self) -> None:
         self._createNetworkManager()
 
-        self.setConnectionState(ConnectionState.connecting)
+        self.setConnectionState(cast(ConnectionState, UnifiedConnectionState.Connecting))
         self._update()  # Manually trigger the first update, as we don't want to wait a few secs before it starts.
         Logger.log("d", "Connection with instance %s with url %s started", self._id.replace("'", "").replace(" ","_"), self._base_url)
         self._update_timer.start()
@@ -488,7 +504,7 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         if reply.error() == QNetworkReply.TimeoutError:
             Logger.log("w", "Received a timeout on a request to the instance")
             self._connection_state_before_timeout = self._connection_state
-            self.setConnectionState(ConnectionState.error)
+            self.setConnectionState(cast(ConnectionState, UnifiedConnectionState.Error))
             return
 
         if self._connection_state_before_timeout and reply.error() == QNetworkReply.NoError:  #  There was a timeout, but we got a correct answer again.
@@ -519,8 +535,8 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                         self._setAcceptsCommands(True)
                         self.setConnectionText(i18n_catalog.i18nc("@info:status", "Connected to Repetier on {0}").format(self._id.replace("'", "").replace(" ","_")))
 
-                    if self._connection_state == ConnectionState.connecting:
-                        self.setConnectionState(ConnectionState.connected)
+                    if self._connection_state == UnifiedConnectionState.Connecting:
+                        self.setConnectionState(cast(ConnectionState, UnifiedConnectionState.Connected))
                     try:
                         json_data = json.loads(bytes(reply.readAll()).decode("utf-8"))
                     except json.decoder.JSONDecodeError:
@@ -588,8 +604,11 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                     self.setConnectionText(i18n_catalog.i18nc("@info:status", "Repetier on {0} does not allow access to print").format(self._id.replace("'", "").replace(" ","_")))
                     error_handled = True
                 elif http_status_code == 409:
-                    if self._connection_state == ConnectionState.connecting:
-                        self.setConnectionState(ConnectionState.connected)
+                    if self._connection_state == ConnectionState.Connecting:
+                        self.setConnectionState(cast(ConnectionState, UnifiedConnectionState.Connected))
+
+
+
 
                     printer.updateState("offline")
                     if printer.activePrintJob:
