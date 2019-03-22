@@ -1,7 +1,7 @@
 from UM.i18n import i18nCatalog
 from UM.Logger import Logger
 from UM.Settings.DefinitionContainer import DefinitionContainer
-from UM.Application import Application
+from cura.CuraApplication import CuraApplication
 
 from UM.Settings.ContainerRegistry import ContainerRegistry
 from cura.MachineAction import MachineAction
@@ -27,7 +27,7 @@ class DiscoverRepetierAction(MachineAction):
         self._window = None
         self._context = None
 
-        self._application = Application.getInstance()
+        self._application = CuraApplication.getInstance()
         self._network_plugin = None
 
         #   QNetwork manager needs to be created in advance. If we don't it can happen that it doesn't correctly
@@ -144,6 +144,7 @@ class DiscoverRepetierAction(MachineAction):
             meta_data = global_container_stack.getMetaData()
             if "repetier_id" in meta_data:
                 return global_container_stack.getMetaDataEntry("repetier_id")
+
 
 
         return ""
@@ -296,7 +297,7 @@ class DiscoverRepetierAction(MachineAction):
 
             global_container_stack.material = ContainerRegistry.getInstance().getEmptyInstanceContainer()
 
-        Application.getInstance().globalContainerStackChanged.emit()
+        CuraApplication.getInstance().globalContainerStackChanged.emit()
 
     @pyqtSlot(str)
     def openWebPage(self, url):

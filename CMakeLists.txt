@@ -10,6 +10,7 @@ install(FILES
     RepetierOutputDevice.py
     RepetierOutputDevicePlugin.py
     NetworkMJPGImage.py
+    zeroconf.py
     MonitorItem.qml
     LICENSE
     README.md
