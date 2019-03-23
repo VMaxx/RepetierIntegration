@@ -358,6 +358,17 @@ Cura.MachineAction
                     }
                     CheckBox
                     {
+                        id: rot180CheckBox
+                        text: catalog.i18nc("@label", "Rotate Webcam 180")
+                        enabled: manager.instanceSupportsCamera
+                        checked: manager.instanceApiKeyAccepted && Cura.ContainerManager.getContainerMetaDataEntry(Cura.MachineManager.activeMachineId, "repetier_webcamrot_180") == "true"
+                        onClicked:
+                        {
+                            manager.setContainerMetaDataEntry(Cura.MachineManager.activeMachineId, "repetier_webcamrot_180", String(checked))
+                        }
+                    }					
+                    CheckBox
+                    {
                         id: rot270CheckBox
                         text: catalog.i18nc("@label", "Rotate Webcam 270")
                         enabled: manager.instanceSupportsCamera
