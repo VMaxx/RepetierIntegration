@@ -738,6 +738,8 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                             self._camera_mirror = True
                         if parseBool(global_container_stack.getMetaDataEntry("repetier_webcamrot_90", False)):
                             self._camera_rotation = 90
+                        if parseBool(global_container_stack.getMetaDataEntry("repetier_webcamrot_180", False)):
+                            self._camera_rotation = 180
                         if parseBool(global_container_stack.getMetaDataEntry("repetier_webcamrot_270", False)):
                             self._camera_rotation = 270
                         Logger.log("d", "Set Repetier camera url to %s", self._camera_url)
@@ -775,6 +777,8 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                                     self._camera_mirror = True
                                 if parseBool(global_container_stack.getMetaDataEntry("repetier_webcamrot_90", False)):
                                     self._camera_rotation = 90
+                                if parseBool(global_container_stack.getMetaDataEntry("repetier_webcamrot_180", False)):
+                                    self._camera_rotation = 180
                                 if parseBool(global_container_stack.getMetaDataEntry("repetier_webcamrot_270", False)):
                                     self._camera_rotation = 270                                
                                 #self.cameraOrientationChanged.emit()
