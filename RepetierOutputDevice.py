@@ -64,6 +64,7 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         if self._path[-1:] != "/":
             self._path += "/"
         self._id = instance_id
+        self._repetier_id = instance_id
         self._properties = properties  # Properties dict as provided by zero conf
 
         self._gcode_stream = StringIO()
@@ -186,6 +187,15 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
     def name(self) -> str:
         return self._name
 
+    ##  Name of the printer in repetier
+    @pyqtProperty(str, constant = True)
+    def repetier_id(self) -> str:
+        return self._repetier_id
+
+    def setRepetierid(self, strid: str) -> None:
+        Logger.log("d", strid)
+        self._repetier_id=strid
+        
     ##  Version (as returned from the zeroConf properties)
     @pyqtProperty(str, constant=True)
     def repetierVersion(self) -> str:
@@ -540,47 +550,39 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                     try:
                         json_data = json.loads(bytes(reply.readAll()).decode("utf-8"))
                     except json.decoder.JSONDecodeError:
-                        Logger.log("w", "Received invalid JSON from Repetier instance.")
+                        Logger.log("w", "Received invalid JSON from Repetier instance.1")
                         json_data = {}
                     #if "temperature" in json_data:
                     try:
-                        if "numExtruder" in json_data[self._id.replace("'", "").replace(" ","_")]:
-                            self._number_of_extruders = 0
-                            printer_state = "idle"
-                            #while "tool%d" % self._num_extruders in json_data["temperature"]:
-                            self._number_of_extruders=json_data[self._id.replace("'", "").replace(" ","_")]["numExtruder"]
-                            if self._number_of_extruders > 1:
-                                # Recreate list of printers to match the new _number_of_extruders
-                                self._createPrinterList()
-                                printer = self._printers[0]
+                        if self._id.replace("'", "").replace(" ","_") in json_data:
+                            if "numExtruder" in json_data[self._id.replace("'", "").replace(" ","_")]:
+                                self._number_of_extruders = 0
+                                printer_state = "idle"
+                                #while "tool%d" % self._num_extruders in json_data["temperature"]:
+                                self._number_of_extruders=json_data[self._id.replace("'", "").replace(" ","_")]["numExtruder"]
+                                if self._number_of_extruders > 1:
+                                    # Recreate list of printers to match the new _number_of_extruders
+                                    self._createPrinterList()
+                                    printer = self._printers[0]
 
-                            if self._number_of_extruders > 0:
-                                self._number_of_extruders_set = True
-      
-                            # Check for hotend temperatures
-                            for index in range(0, self._number_of_extruders):
-                                extruder = printer.extruders[index]
-                                if "extruder" in json_data[self._id.replace("'", "").replace(" ","_")]:                            
-                                    hotend_temperatures = json_data[self._id.replace("'", "").replace(" ","_")]["extruder"]
-                                    #Logger.log("d", "target end temp %s", hotend_temperatures[index]["tempSet"])
-                                    #Logger.log("d", "target end temp %s", hotend_temperatures[index]["tempRead"])
-                                    extruder.updateTargetHotendTemperature(hotend_temperatures[index]["tempSet"])
-                                    extruder.updateHotendTemperature(hotend_temperatures[index]["tempRead"])                                    
-                                else:
-                                    extruder.updateTargetHotendTemperature(0)
-                                    extruder.updateHotendTemperature(0)
-                        #Logger.log("d", "json_data %s", json_data[self._key])
-                        if "heatedBed" in json_data[self._id.replace("'", "").replace(" ","_")]:
-                            bed_temperatures = json_data[self._id.replace("'", "").replace(" ","_")]["heatedBed"]
-                            actual_temperature = bed_temperatures["tempRead"] if bed_temperatures["tempRead"] is not None else -1
-                            printer.updateBedTemperature(actual_temperature)
-                            target_temperature = bed_temperatures["tempSet"] if bed_temperatures["tempSet"] is not None else -1                                    
-                            printer.updateTargetBedTemperature(target_temperature)
-                            #Logger.log("d", "target bed temp %s", target_temperature)
-                            #Logger.log("d", "actual bed temp %s", actual_temperature)
-                        else:
-                            if "heatedBeds" in json_data[self._id.replace("'", "").replace(" ","_")]:
-                                bed_temperatures = json_data[self._id.replace("'", "").replace(" ","_")]["heatedBeds"][0]
+                                if self._number_of_extruders > 0:
+                                    self._number_of_extruders_set = True
+          
+                                # Check for hotend temperatures
+                                for index in range(0, self._number_of_extruders):
+                                    extruder = printer.extruders[index]
+                                    if "extruder" in json_data[self._id.replace("'", "").replace(" ","_")]:                            
+                                        hotend_temperatures = json_data[self._id.replace("'", "").replace(" ","_")]["extruder"]
+                                        #Logger.log("d", "target end temp %s", hotend_temperatures[index]["tempSet"])
+                                        #Logger.log("d", "target end temp %s", hotend_temperatures[index]["tempRead"])
+                                        extruder.updateTargetHotendTemperature(hotend_temperatures[index]["tempSet"])
+                                        extruder.updateHotendTemperature(hotend_temperatures[index]["tempRead"])                                    
+                                    else:
+                                        extruder.updateTargetHotendTemperature(0)
+                                        extruder.updateHotendTemperature(0)
+                            #Logger.log("d", "json_data %s", json_data[self._key])
+                            if "heatedBed" in json_data[self._id.replace("'", "").replace(" ","_")]:
+                                bed_temperatures = json_data[self._id.replace("'", "").replace(" ","_")]["heatedBed"]
                                 actual_temperature = bed_temperatures["tempRead"] if bed_temperatures["tempRead"] is not None else -1
                                 printer.updateBedTemperature(actual_temperature)
                                 target_temperature = bed_temperatures["tempSet"] if bed_temperatures["tempSet"] is not None else -1                                    
@@ -588,11 +590,20 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                                 #Logger.log("d", "target bed temp %s", target_temperature)
                                 #Logger.log("d", "actual bed temp %s", actual_temperature)
                             else:
-                                printer.updateBedTemperature(-1)
-                                printer.updateTargetBedTemperature(0)
-                                printer.updateState(printer_state)
+                                if "heatedBeds" in json_data[self._id.replace("'", "").replace(" ","_")]:
+                                    bed_temperatures = json_data[self._id.replace("'", "").replace(" ","_")]["heatedBeds"][0]
+                                    actual_temperature = bed_temperatures["tempRead"] if bed_temperatures["tempRead"] is not None else -1
+                                    printer.updateBedTemperature(actual_temperature)
+                                    target_temperature = bed_temperatures["tempSet"] if bed_temperatures["tempSet"] is not None else -1                                    
+                                    printer.updateTargetBedTemperature(target_temperature)
+                                    #Logger.log("d", "target bed temp %s", target_temperature)
+                                    #Logger.log("d", "actual bed temp %s", actual_temperature)
+                                else:
+                                    printer.updateBedTemperature(-1)
+                                    printer.updateTargetBedTemperature(0)
+                                    printer.updateState(printer_state)
                     except:
-                        Logger.log("w", "Received invalid JSON from Repetier instance.")                    
+                        Logger.log("w", "Received invalid JSON from Repetier instance.2")                    
                         json_data = {}
                         printer.activePrintJob.updateState("offline")
                         self.setConnectionText(i18n_catalog.i18nc("@info:status", "Repetier on {0} configuration is invalid").format(self._id.replace("'", "").replace(" ","_")))
