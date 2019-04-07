@@ -643,69 +643,69 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                         Logger.log("w", "Received invalid JSON from Repetier instance.")
                         json_data = {}
 
-                    #try:
-                    if printer:
-                        print_job_state = "ready"
-                        printer.updateState("idle")
-                        if printer.activePrintJob is None:
-                            print_job = PrintJobOutputModel(output_controller=self._output_controller)
-                            printer.updateActivePrintJob(print_job)
-                        else:
-                            print_job = printer.activePrintJob
-                            #job_state = "ready"
-                            #if "job" in json_data[0]:
-                            #    if json_data[0]["job"] != "none":
-                            #        job_state = "printing"
-
-                        print_job_state = "ready"
-                        if "job" in json_data[0]:
-                            #Logger.log("d","Jobname: %s",json_data[0]["job"])
-                            if json_data[0]["job"] != "none":
-                                print_job.updateName(json_data[0]["job"])
-                                print_job_state = "printing"
-                            if json_data[0]["job"] == "none":                                
-                                print_job_state = "ready"
-                                printer.updateState("idle")
+                    try:
+                        if printer:
+                            print_job_state = "ready"
+                            printer.updateState("idle")
+                            if printer.activePrintJob is None:
                                 print_job = PrintJobOutputModel(output_controller=self._output_controller)
                                 printer.updateActivePrintJob(print_job)
-                        if "paused" in json_data[0]:
-                            if json_data[0]["paused"] != False:
-                                print_job_state = "paused"                                                                
-                        #printer.updateState(printer_state)
-                        #if "state" in json_data:
-                        #    if json_data["state"]["flags"]["error"]:
-                        #        job_state = "error"
-                        #    elif json_data["state"]["flags"]["paused"]:
-                        #        job_state = "paused"
-                        #    elif json_data["state"]["flags"]["printing"]:
-                        #        job_state = "printing"
-                        #    elif json_data["state"]["flags"]["ready"]:
-                        #        job_state = "ready"
-                        print_job.updateState(print_job_state)
-                        
-                        #progress = json_data["progress"]["completion"]
-                        if "done" in json_data[0]:
-                            progress = json_data[0]["done"]
-                        if "start" in json_data[0]:
-                            if json_data[0]["start"]:
-                                ##self.setTimeElapsed(json_data[0]["start"])
-                                ##self.setTimeElapsed(datetime.datetime.fromtimestamp(json_data[0]["start"]).strftime('%Y-%m-%d %H:%M:%S'))
-                                if json_data[0]["printTime"]:
-                                    print_job.updateTimeTotal(json_data[0]["printTime"])
-                                if json_data[0]["printedTimeComp"]:
-                                    print_job.updateTimeElapsed(json_data[0]["printedTimeComp"])
-                                elif progress > 0:
-                                    print_job.updateTimeTotal(json_data[0]["printTime"] * (progress / 100))
-                                else:
-                                    print_job.updateTimeTotal(0)
                             else:
-                                print_job.updateTimeElapsed(0)
-                                print_job.updateTimeTotal(0)
-                            print_job.updateName(json_data[0]["job"])
-                    #except:
-                    #    if printer:
-                    #        printer.activePrintJob.updateState("offline")
-                    #        self.setConnectionText(i18n_catalog.i18nc("@info:status", "Repetier on {0} configuration is invalid").format(self._key))
+                                print_job = printer.activePrintJob
+                                #job_state = "ready"
+                                #if "job" in json_data[0]:
+                                #    if json_data[0]["job"] != "none":
+                                #        job_state = "printing"
+
+                            print_job_state = "ready"
+                            if "job" in json_data[0]:
+                                #Logger.log("d","Jobname: %s",json_data[0]["job"])
+                                if json_data[0]["job"] != "none":
+                                    print_job.updateName(json_data[0]["job"])
+                                    print_job_state = "printing"
+                                if json_data[0]["job"] == "none":                                
+                                    print_job_state = "ready"
+                                    printer.updateState("idle")
+                                    print_job = PrintJobOutputModel(output_controller=self._output_controller)
+                                    printer.updateActivePrintJob(print_job)
+                            if "paused" in json_data[0]:
+                                if json_data[0]["paused"] != False:
+                                    print_job_state = "paused"                                                                
+                            #printer.updateState(printer_state)
+                            #if "state" in json_data:
+                            #    if json_data["state"]["flags"]["error"]:
+                            #        job_state = "error"
+                            #    elif json_data["state"]["flags"]["paused"]:
+                            #        job_state = "paused"
+                            #    elif json_data["state"]["flags"]["printing"]:
+                            #        job_state = "printing"
+                            #    elif json_data["state"]["flags"]["ready"]:
+                            #        job_state = "ready"
+                            print_job.updateState(print_job_state)
+                            
+                            #progress = json_data["progress"]["completion"]
+                            if "done" in json_data[0]:
+                                progress = json_data[0]["done"]
+                            if "start" in json_data[0]:
+                                if json_data[0]["start"]:
+                                    ##self.setTimeElapsed(json_data[0]["start"])
+                                    ##self.setTimeElapsed(datetime.datetime.fromtimestamp(json_data[0]["start"]).strftime('%Y-%m-%d %H:%M:%S'))
+                                    if json_data[0]["printTime"]:
+                                        print_job.updateTimeTotal(json_data[0]["printTime"])
+                                    if json_data[0]["printedTimeComp"]:
+                                        print_job.updateTimeElapsed(json_data[0]["printedTimeComp"])
+                                    elif progress > 0:
+                                        print_job.updateTimeTotal(json_data[0]["printTime"] * (progress / 100))
+                                    else:
+                                        print_job.updateTimeTotal(0)
+                                else:
+                                    print_job.updateTimeElapsed(0)
+                                    print_job.updateTimeTotal(0)
+                                print_job.updateName(json_data[0]["job"])
+                    except:
+                        if printer:
+                            printer.activePrintJob.updateState("offline")
+                            self.setConnectionText(i18n_catalog.i18nc("@info:status", "Repetier on {0} configuration is invalid").format(self._key))
                 else:
                     if printer:
                         printer.activePrintJob.updateState("offline")
