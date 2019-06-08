@@ -83,6 +83,7 @@ class RepetierOutputDevicePlugin(OutputDevicePlugin):
                 b"useHttps": b"true" if properties.get("useHttps", False) else b"false",
                 b'userName': properties.get("userName", "").encode("utf-8"),
                 b'password': properties.get("password", "").encode("utf-8"),
+				b'repetier_id': properties.get("repetier_id", "").encode("utf-8"),
                 b"manual": b"true"
             } # These additional properties use bytearrays to mimick the output of zeroconf
             self.addInstance(name, properties["address"], properties["port"], additional_properties)
@@ -92,11 +93,11 @@ class RepetierOutputDevicePlugin(OutputDevicePlugin):
             Logger.log("w", "Zeroconf discovery has died, restarting discovery of Repetier instances.")
             self.startDiscovery()
 
-    def addManualInstance(self, name, address, port, path, useHttps = False, userName = "", password = ""):
-        self._manual_instances[name] = {"address": address, "port": port, "path": path, "useHttps": useHttps, "userName": userName, "password": password}
+    def addManualInstance(self, name, address, port, path, useHttps = False, userName = "", password = "", repetierid=""):
+        self._manual_instances[name] = {"address": address, "port": port, "path": path, "useHttps": useHttps, "userName": userName, "password": password, "repetier_id":repetierid}
         self._preferences.setValue("Repetier/manual_instances", json.dumps(self._manual_instances))
 
-        properties = { b"path": path.encode("utf-8"), b"useHttps": b"true" if useHttps else b"false", b'userName': userName.encode("utf-8"), b'password': password.encode("utf-8"), b"manual": b"true" }
+        properties = { b"path": path.encode("utf-8"), b"useHttps": b"true" if useHttps else b"false", b'userName': userName.encode("utf-8"), b'password': password.encode("utf-8"), b"manual": b"true",b'repetier_id':repetierid.encode("utf-8")}
 
         if name in self._instances:
             self.removeInstance(name)
@@ -129,7 +130,7 @@ class RepetierOutputDevicePlugin(OutputDevicePlugin):
             return
 
         for key in self._instances:
-            if key == global_container_stack.getMetaDataEntry("repetier_id"):
+            if key == global_container_stack.getMetaDataEntry("id"):
                 api_key = global_container_stack.getMetaDataEntry("repetier_api_key", "")
                 self._instances[key].setApiKey(api_key)
                 self._instances[key].setShowCamera(parseBool(global_container_stack.getMetaDataEntry("repetier_show_camera", "false")))
@@ -143,11 +144,12 @@ class RepetierOutputDevicePlugin(OutputDevicePlugin):
     def addInstance(self, name, address, port, properties):
         instance = RepetierOutputDevice.RepetierOutputDevice(name, address, port, properties)
         self._instances[instance.getId()] = instance
-        global_container_stack = Application.getInstance().getGlobalContainerStack()
-        if global_container_stack and instance.getId() == global_container_stack.getMetaDataEntry("repetier_id"):
-            instance.setApiKey(api_key)
-            instance.connectionStateChanged.connect(self._onInstanceConnectionStateChanged)			
-            instance.connect()
+##        global_container_stack = Application.getInstance().getGlobalContainerStack()
+##        if global_container_stack and instance.getId() == global_container_stack.getMetaDataEntry("id"):
+##            if api_key:
+##                instance.setApiKey(api_key)
+##                instance.connectionStateChanged.connect(self._onInstanceConnectionStateChanged)            
+##                instance.connect()
 
     def removeInstance(self, name):
         instance = self._instances.pop(name, None)

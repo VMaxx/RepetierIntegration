@@ -10,7 +10,8 @@ from cura.Settings.CuraStackBuilder import CuraStackBuilder
 from PyQt5.QtCore import pyqtSignal, pyqtProperty, pyqtSlot, QUrl, QObject
 from PyQt5.QtQml import QQmlComponent, QQmlContext
 from PyQt5.QtGui import QDesktopServices
-from PyQt5.QtNetwork import QNetworkRequest, QNetworkAccessManager
+from PyQt5.QtWidgets import QMessageBox
+from PyQt5.QtNetwork import QNetworkRequest, QNetworkAccessManager, QNetworkReply
 
 import re
 import os.path
@@ -34,7 +35,8 @@ class DiscoverRepetierAction(MachineAction):
         #   hook itself into the event loop, which results in events never being fired / done.
         self._network_manager = QNetworkAccessManager()
         self._network_manager.finished.connect(self._onRequestFinished)
-
+        self._printers = [""]
+        self._printerlist_reply = None
         self._settings_reply = None
 
         # Try to get version information from plugin.json
@@ -104,12 +106,12 @@ class DiscoverRepetierAction(MachineAction):
 
         self._network_plugin.removeManualInstance(name)
 
-    @pyqtSlot(str, str, int, str, bool, str, str)
-    def setManualInstance(self, name, address, port, path, useHttps, userName, password):
+    @pyqtSlot(str, str, int, str, bool, str, str,str)
+    def setManualInstance(self, name, address, port, path, useHttps, userName, password,repetierid):
         # This manual printer could replace a current manual printer
         self._network_plugin.removeManualInstance(name)
         
-        self._network_plugin.addManualInstance(name, address, port, path, useHttps, userName, password)
+        self._network_plugin.addManualInstance(name, address, port, path, useHttps, userName, password, repetierid)
 
     def _onContainerAdded(self, container):
         # Add this action as a supported action to all machine definitions
@@ -144,13 +146,21 @@ class DiscoverRepetierAction(MachineAction):
             meta_data = global_container_stack.getMetaData()
             if "repetier_id" in meta_data:
                 return global_container_stack.getMetaDataEntry("repetier_id")
-
-
-
         return ""
 
-    @pyqtSlot(str, str, str, str)
-    def testApiKey(self, base_url, api_key, basic_auth_username = "", basic_auth_password = ""):        
+    @pyqtSlot(str)
+    def getPrinterList(self, base_url):        
+        self._instance_responded = False
+        # Request 'settings' dump        
+        url = QUrl(base_url + "printer/info")
+        settings_request = QNetworkRequest(url)        
+        settings_request.setRawHeader("User-Agent".encode(), self._user_agent)
+        self._printerlist_reply=self._network_manager.get(settings_request)
+        return self._printers
+
+                
+    @pyqtSlot(str, str, str, str, str)
+    def testApiKey(self, base_url, api_key, basic_auth_username = "", basic_auth_password = "", work_id = ""):
         self._instance_responded = False
         self._instance_api_key_accepted = False
         self._instance_supports_sd = False
@@ -159,17 +169,16 @@ class DiscoverRepetierAction(MachineAction):
         self._instance_webcamrot90 = False
         self._instance_webcamrot270 = False
         self._instance_supports_camera = False
-        self.selectedInstanceSettingsChanged.emit()
-        global_container_stack = self._application.getGlobalContainerStack()
-        if global_container_stack:
-             work_id = global_container_stack.getId()
-
-
-        if api_key != "":
+        self.selectedInstanceSettingsChanged.emit()        
+        #global_container_stack = self._application.getGlobalContainerStack()
+        #if global_container_stack:
+        #     work_id = global_container_stack.getMetaDataEntry("repetier_id")
+		
+        if ((api_key != "") and (api_key !=None) and (work_id!="")):
             Logger.log("d", "Trying to access Repetier instance at %s with the provided API key." % base_url)
             Logger.log("d", "Using %s as work_id" % work_id)
             Logger.log("d", "Using %s as api_key" % api_key)
-            ## Request 'settings' dump
+            # Request 'settings' dump
             url = QUrl(base_url + "printer/api/" + work_id + "?a=getPrinterConfig&apikey=" + api_key)            
             settings_request = QNetworkRequest(url)
             settings_request.setRawHeader("x-api-key".encode(), api_key.encode())
@@ -179,6 +188,7 @@ class DiscoverRepetierAction(MachineAction):
                 settings_request.setRawHeader("Authorization".encode(), ("Basic %s" % data).encode())
             self._settings_reply = self._network_manager.get(settings_request)
         else:
+            self.getPrinterList(base_url)
             if self._settings_reply:
                 self._settings_reply.abort()
                 self._settings_reply = None
@@ -197,7 +207,7 @@ class DiscoverRepetierAction(MachineAction):
             # Ensure that the connection states are refreshed.
             self._network_plugin.reCheckConnections()
 
-    ##  Get the stored API key of this machine
+    #  Get the stored API key of this machine
     #   \return key String containing the key of the machine.
     @pyqtSlot(str, result=str)
     def getApiKey(self, instance_id):
@@ -212,6 +222,10 @@ class DiscoverRepetierAction(MachineAction):
         return api_key
 
     selectedInstanceSettingsChanged = pyqtSignal()
+
+    @pyqtProperty(list)
+    def getPrinters(self):
+        return self._printers
 
     @pyqtProperty(bool, notify = selectedInstanceSettingsChanged)
     def instanceResponded(self):
@@ -315,15 +329,36 @@ class DiscoverRepetierAction(MachineAction):
         self._application.addAdditionalComponent("monitorButtons", self._additional_components.findChild(QObject, "openRepetierButton"))
 
 
-    ##  Handler for all requests that have finished.
+    #  Handler for all requests that have finished.
     def _onRequestFinished(self, reply):
-
+        if reply.error() == QNetworkReply.TimeoutError:
+            QMessageBox.warning(None,'Connection Timeout','Connection Timeout')
+            return
         http_status_code = reply.attribute(QNetworkRequest.HttpStatusCodeAttribute)
         if not http_status_code:
-            # Received no or empty reply
+            #QMessageBox.warning(None,'Connection Attempt2',http_status_code)
+            # Received no or empty reply            
             return
 
         if reply.operation() == QNetworkAccessManager.GetOperation:
+            if "printer/info" in reply.url().toString():  # Repetier settings dump from printer/info:            
+                if http_status_code == 200:
+                    try:
+                        json_data = json.loads(bytes(reply.readAll()).decode("utf-8"))
+                        Logger.log("d",reply.url().toString())
+                        Logger.log("d", json_data)
+                    except json.decoder.JSONDecodeError:
+                        Logger.log("w", "Received invalid JSON from Repetier instance.")
+                        json_data = {}
+
+                    if "printers" in json_data:
+                        Logger.log("d", "DiscoverRepetierAction: printers: %s",len(json_data["printers"]))
+                        if len(json_data["printers"])>0:
+                            self._printers = [""]
+                            for printerinfo in json_data["printers"]:
+                                 Logger.log("d", "Slug: %s",printerinfo["slug"])
+                                 self._printers.append(printerinfo["slug"])
+                                   
             if "getPrinterConfig" in reply.url().toString():  # Repetier settings dump from getPrinterConfig:            
                 if http_status_code == 200:
                     Logger.log("d", "API key accepted by Repetier.")

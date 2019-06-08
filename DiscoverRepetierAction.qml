@@ -48,7 +48,7 @@ Cura.MachineAction
                 text: catalog.i18nc("@action:button", "Add");
                 onClicked:
                 {
-                    manualPrinterDialog.showDialog("", "", "80", "/", false, "", "");
+                    manualPrinterDialog.showDialog("", "192.168.1.250", "3344", "/", false, "", "","");
                 }
             }
 
@@ -62,7 +62,7 @@ Cura.MachineAction
                     manualPrinterDialog.showDialog(base.selectedInstance.name, base.selectedInstance.ipAddress,
                                                    base.selectedInstance.port, base.selectedInstance.path,
                                                    base.selectedInstance.getProperty("useHttps") == "true",
-                                                   base.selectedInstance.getProperty("userName"), base.selectedInstance.getProperty("password"));
+                                                   base.selectedInstance.getProperty("userName"), base.selectedInstance.getProperty("password"),Cura.ContainerManager.getContainerMetaDataEntry(base.selectedInstance.name, "repetier_id"));
                 }
             }
 
@@ -200,13 +200,25 @@ Cura.MachineAction
                     {
                         width: Math.floor(parent.width * 0.2)    
                         wrapMode: Text.WordWrap
+                        text: catalog.i18nc("@label", "RepetierID")
+                    }
+                    Label
+                    {
+                        id: lblRepID
+                        width: Math.floor(parent.width * 0.2)    
+                        text: base.selectedInstance ? Cura.ContainerManager.getContainerMetaDataEntry(base.selectedInstance.name, "repetier_id") : ""
+                    }                    
+                    Label
+                    {
+                        width: Math.floor(parent.width * 0.2)    
+                        wrapMode: Text.WordWrap
                         text: catalog.i18nc("@label", "API Key")
                     }
                     TextField
                     {
                         id: apiKey
                         width: Math.floor(parent.width * 0.8 - UM.Theme.getSize("default_margin").width)                            
-                        text: manager.apiKey
+                        text: base.selectedInstance ? Cura.ContainerManager.getContainerMetaDataEntry(base.selectedInstance.name, "repetier_api_key") : ""
                         onTextChanged:
                         {
                             apiCheckDelay.throttledCheck()
@@ -217,7 +229,12 @@ Cura.MachineAction
                         target: base
                         onSelectedInstanceChanged:
                         {
-                            apiKey.text = manager.getApiKey(base.selectedInstance.getId())
+                            if(base.selectedInstance != null)
+							{
+								lblRepID.text = Cura.ContainerManager.getContainerMetaDataEntry(base.selectedInstance.name, "repetier_id")
+								apiKey.text = Cura.ContainerManager.getContainerMetaDataEntry(base.selectedInstance.name, "repetier_api_key")
+								//apiKey.text = manager.getApiKey(base.selectedInstance.getId())
+							}
                         }
                     }
                     Timer
@@ -245,7 +262,7 @@ Cura.MachineAction
                             if(base.selectedInstance != null)
                             if(base.selectedInstance.baseURL != null)
                             {
-                                 manager.testApiKey(base.selectedInstance.baseURL, apiKey.text, base.selectedInstance.getProperty("userName"), base.selectedInstance.getProperty("password"))
+                                 manager.testApiKey(base.selectedInstance.baseURL, apiKey.text, base.selectedInstance.getProperty("userName"), base.selectedInstance.getProperty("password"), lblRepID.text)
                                  checkOnTrigger = false;
                                  restart();
                             }
@@ -366,7 +383,7 @@ Cura.MachineAction
                         {
                             manager.setContainerMetaDataEntry(Cura.MachineManager.activeMachineId, "repetier_webcamrot_180", String(checked))
                         }
-                    }					
+                    }                    
                     CheckBox
                     {
                         id: rot270CheckBox
@@ -432,8 +449,8 @@ Cura.MachineAction
                             if(fixGcodeFlavor.visible)
                             {
                                 manager.applyGcodeFlavorFix(fixGcodeFlavor.checked)
-                            }
-                            manager.setInstanceId(base.selectedInstance.getId())
+                            }							
+                            manager.setInstanceId(base.selectedInstance.repetier_id)
                             manager.setApiKey(apiKey.text)
                             completed()
                         }
@@ -463,15 +480,17 @@ Cura.MachineAction
         property alias pathText: pathField.text
         property alias userNameText: userNameField.text
         property alias passwordText: passwordField.text
+        property alias repidText: repid.editText
+        property alias selrepidText: repid.currentText
 
         title: catalog.i18nc("@title:window", "Manually added Repetier instance")
 
         minimumWidth: 400 * screenScaleFactor
-        minimumHeight: (showAdvancedOptions.checked ? 280 : 160) * screenScaleFactor
+        minimumHeight: (showAdvancedOptions.checked ? 340 : 220) * screenScaleFactor
         width: minimumWidth
         height: minimumHeight
 
-        signal showDialog(string name, string address, string port, string path_, bool useHttps, string userName, string password)
+        signal showDialog(string name, string address, string port, string path_, bool useHttps, string userName, string password, string repetierid)
         onShowDialog:
         {
             oldName = name;
@@ -485,7 +504,7 @@ Cura.MachineAction
             httpsCheckbox.checked = useHttps;
             userNameText = userName;
             passwordText = password;
-
+            repidText = repetierid;			
             manualPrinterDialog.show();
         }
 
@@ -497,13 +516,14 @@ Cura.MachineAction
             }
             if(portText == "")
             {
-                portText = "80" // default http port
+                portText = "3344" // default http port
             }
             if(pathText.substr(0,1) != "/")
             {
                 pathText = "/" + pathText // ensure absolute path
             }
-            manager.setManualInstance(nameText, addressText, parseInt(portText), pathText, httpsCheckbox.checked, userNameText, passwordText)
+            manager.setManualInstance(nameText, addressText, parseInt(portText), pathText, httpsCheckbox.checked, userNameText, passwordText, repidText)
+			manager.setContainerMetaDataEntry(Cura.MachineManager.activeMachineId, "repetier_id", repidText)
         }
 
         Column {
@@ -567,7 +587,6 @@ Cura.MachineAction
                         regExp: /[0-9]*/
                     }
                 }
-
                 Label
                 {
                     text: catalog.i18nc("@label","Path")
@@ -584,7 +603,65 @@ Cura.MachineAction
                         regExp: /[a-zA-Z0-9\.\-\_\/]*/
                     }
                 }
+                Button
+                {
+                text: catalog.i18nc("@action:button","Get Printers")
+                onClicked:
+                    {
+                        manager.getPrinterList(addressField.text+":"+portField.text)
+                        if (manager.getPrinters.length>0)
+                            {
+                                comboPrinters.clear()
+                                for (var i =0;i<manager.getPrinters.length;i++)
+                                    if(comboPrinters[i] != "")
+                                        comboPrinters.append({ label: catalog.i18nc("@action:ComboBox option", manager.getPrinters[i]), key: manager.getPrinters[i] })
+                            }                        
+                    }
+                }
+                Label
+                {
+                    text: catalog.i18nc("@label","")
+                    width: Math.floor(parent.width * 0.4)    
+                }                
+
+                Label
+                {
+                    text: catalog.i18nc("@label","Printer")
+                    width: Math.floor(parent.width * 0.4)    
+                }
+
+                ComboBox
+                {
+                    model: ListModel
+                    {
+                        id: comboPrinters
+                    }
+                    currentIndex:
+                    {
+                        var currentValue = propertyProvider.properties.value;
+                        var index = 0;
+                        for(var i = 0; i < comboPrinters.length; i++)
+                        {
+							if ( typeof comboPrinters.get(i).key !== "undefined" )
+								if(comboPrinters.get(i).key == currentValue) {
+									index = i;
+									break;
+                            }
+                        }
+                        return index
+                    }
+					onCurrentIndexChanged:
+						{
+						if ( typeof comboPrinters.get(currentIndex).key !=="undefined" )
+							editText=comboPrinters.get(currentIndex).key
+						}
+                    textRole: "label"
+                    editable: true
+                    id: repid
+                    width: Math.floor(parent.width * 0.4)
+                }
             }
+
 
             CheckBox
             {
@@ -663,11 +740,11 @@ Cura.MachineAction
             Button {
                 text: catalog.i18nc("@action:button", "Ok")
                 onClicked:
-                {
+                {					
                     manualPrinterDialog.accept()
                     manualPrinterDialog.hide()
                 }
-                enabled: manualPrinterDialog.nameText.trim() != "" && manualPrinterDialog.addressText.trim() != ""
+                enabled: manualPrinterDialog.nameText.trim() != "" && manualPrinterDialog.addressText.trim() != "" && manualPrinterDialog.portText.trim() != "" && manualPrinterDialog.selrepidText.trim() != ""
                 isDefault: true
             }
         ]

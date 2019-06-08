@@ -1,5 +1,5 @@
 # RepetierIntegration
-# Version 4.0
+# Version 4.1
 # Shane Bumpurs
 Cura plugin which enables printing directly to Repetier and monitoring the progress
 The name has changed to RepetierIntegration in the plugin folder.
@@ -9,7 +9,7 @@ This plugin is basically a copy of the Octoprint plugin with the necessary chang
 Installation
 ----
 * Manually:
-  - Make sure your Cura version is 4.0
+  - Make sure your Cura version is 4.0+
   - Download or clone the repository into [Cura installation folder]/plugins/RepetierIntegration
     or in the plugins folder inside the configuration folder. The configuration folder can be
     found via Help -> Show Configuration Folder inside Cura.
@@ -20,18 +20,16 @@ Installation
 How to use
 ----
 - Make sure Repetier is up and running
-- In Cura, add a Printer instance name that matches the 3d printer name you have added to Repetier.  The name of the instance _must_ match the printer.
+- In Cura, under Manage printers select your printer.
 - Select "Connect to Repetier" on the Manage Printers page.
-- Select your Repetier instance from the list and enter the API key which is
-  available in the Repetier settings.  If you've setup a userid and password you must click advanced and enter that information.
-- From this point on, the print monitor should be functional and you should be
-  able to switch to "Print to Repetier" on the bottom of the sidebar.
+- Click add and make sure you match the Name you give it in the plugin, with the name of the Printer in Cura.
+- Fill in the IP and Port, if you have security turned on, click the advanced checkbox and enter that information
+- Click Get Printers button, it should populate the dropdown to select your repetier printer.
+- Click OK this will show the printer in the Printers list again but then ask for your Repetier API key.  Once that is filled you can check the extra options if you have a webcam and need to rotate it.
+- If you do not want to print immediately but have your print job stored uncheck "Automatically start print job after uploading"
+- From this point on, the print monitor should be functional and you should be able to switch to "Print to Repetier" on the bottom of the sidebar.
   
   Config example:
-  ![alt text](https://user-images.githubusercontent.com/12956626/37628328-fae3cbc6-2ba6-11e8-93bc-2b138debe246.jpg "Config")
+  ![alt text](https://github.com/VMaxx/RepetierIntegration/blob/master/webcam.jpg "Config")
 
-  Repetier 90.1 Webcam config issue:
-  You must choose MJPG Stream alone and not use the default.
-  ![alt text](https://user-images.githubusercontent.com/12956626/42852880-a54c0d1c-89f8-11e8-8541-bf9d691cbae4.jpg "Webcam Config")
-  
- 
+  Latest change: Multiple printers now work.  Fixed issue with Repetier printer name not matching Cura printer name
