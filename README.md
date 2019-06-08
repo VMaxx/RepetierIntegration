@@ -30,6 +30,6 @@ How to use
 - From this point on, the print monitor should be functional and you should be able to switch to "Print to Repetier" on the bottom of the sidebar.
   
   Config example:
-  ![alt text](https://github.com/VMaxx/RepetierIntegration/blob/master/webcam.jpg "Config")
-
+  ![alt text](https://user-images.githubusercontent.com/12956626/59142707-9d0d5e00-8987-11e9-94f7-53bc2707e3d1.jpg "Config") 
+  
   Latest change: Multiple printers now work.  Fixed issue with Repetier printer name not matching Cura printer name
