@@ -744,7 +744,7 @@ Cura.MachineAction
                     manualPrinterDialog.accept()
                     manualPrinterDialog.hide()
                 }
-                enabled: manualPrinterDialog.nameText.trim() != "" && manualPrinterDialog.addressText.trim() != "" && manualPrinterDialog.portText.trim() != "" && manualPrinterDialog.selrepidText.trim() != ""
+                enabled: manualPrinterDialog.nameText.trim() != "" && manualPrinterDialog.addressText.trim() != "" && manualPrinterDialog.portText.trim() != "" && manualPrinterDialog.repidText.trim() != ""
                 isDefault: true
             }
         ]
