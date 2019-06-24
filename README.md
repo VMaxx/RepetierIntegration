@@ -16,6 +16,8 @@ Installation
     NB: The folder of the plugin itself *must* be ```RepetierIntegration```
     NB: Make sure you download the branch that matches the Cura branch (ie: 3.1 for Cura 2.2-3.1, 3.2 for Cura 3.2, 3.3 for Cura 3.3 etc)
 
+Blurry Youtube Video showing Install
+https://youtu.be/VHw93Pt_QIo
 
 How to use
 ----
