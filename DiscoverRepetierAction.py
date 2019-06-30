@@ -151,8 +151,8 @@ class DiscoverRepetierAction(MachineAction):
     @pyqtSlot(str)
     def getPrinterList(self, base_url):        
         self._instance_responded = False
-        # Request 'settings' dump        
-        url = QUrl(base_url + "printer/info")
+        url = QUrl("http://" + base_url + "/printer/info")
+        Logger.log("d", "getPrinterList:" + url.toString())
         settings_request = QNetworkRequest(url)        
         settings_request.setRawHeader("User-Agent".encode(), self._user_agent)
         self._printerlist_reply=self._network_manager.get(settings_request)
@@ -178,8 +178,7 @@ class DiscoverRepetierAction(MachineAction):
             Logger.log("d", "Trying to access Repetier instance at %s with the provided API key." % base_url)
             Logger.log("d", "Using %s as work_id" % work_id)
             Logger.log("d", "Using %s as api_key" % api_key)
-            # Request 'settings' dump
-            url = QUrl(base_url + "printer/api/" + work_id + "?a=getPrinterConfig&apikey=" + api_key)            
+            url = QUrl(base_url + "/printer/api/" + work_id + "?a=getPrinterConfig&apikey=" + api_key)            
             settings_request = QNetworkRequest(url)
             settings_request.setRawHeader("x-api-key".encode(), api_key.encode())
             settings_request.setRawHeader("User-Agent".encode(), self._user_agent)
@@ -337,10 +336,12 @@ class DiscoverRepetierAction(MachineAction):
         http_status_code = reply.attribute(QNetworkRequest.HttpStatusCodeAttribute)
         if not http_status_code:
             #QMessageBox.warning(None,'Connection Attempt2',http_status_code)
-            # Received no or empty reply            
+            # Received no or empty reply
+            Logger.log("d","Received no or empty reply")
             return
 
         if reply.operation() == QNetworkAccessManager.GetOperation:
+            Logger.log("d",reply.url().toString())
             if "printer/info" in reply.url().toString():  # Repetier settings dump from printer/info:            
                 if http_status_code == 200:
                     try:
