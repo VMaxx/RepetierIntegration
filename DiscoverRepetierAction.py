@@ -359,7 +359,21 @@ class DiscoverRepetierAction(MachineAction):
                             for printerinfo in json_data["printers"]:
                                  Logger.log("d", "Slug: %s",printerinfo["slug"])
                                  self._printers.append(printerinfo["slug"])
-                                   
+
+                    if "apikey" in json_data:
+                        Logger.log("d", "DiscoverRepetierAction: apikey: %s",json_data["apikey"])
+                        global_container_stack = self._application.getGlobalContainerStack()
+                        if not global_container_stack:
+                            return
+                        global_container_stack.setMetaDataEntry("repetier_api_key", json_data["apikey"])
+                        self._keys_cache[self.getInstanceId()] = json_data["apikey"]
+                        keys_cache = base64.b64encode(json.dumps(self._keys_cache).encode("ascii")).decode("ascii")
+                        self._preferences.setValue("Repetier/keys_cache", keys_cache)
+
+        if self._network_plugin:
+            # Ensure that the connection states are refreshed.
+            self._network_plugin.reCheckConnections()
+
             if "getPrinterConfig" in reply.url().toString():  # Repetier settings dump from getPrinterConfig:            
                 if http_status_code == 200:
                     Logger.log("d", "API key accepted by Repetier.")
