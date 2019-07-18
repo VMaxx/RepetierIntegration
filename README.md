@@ -34,4 +34,5 @@ How to use
   Config example:
   ![alt text](https://user-images.githubusercontent.com/12956626/59142707-9d0d5e00-8987-11e9-94f7-53bc2707e3d1.jpg "Config") 
   
-  Latest change: Multiple printers now work.  Fixed issue with Repetier printer name not matching Cura printer name
+  Latest changes: Multiple printers now work.  Fixed issue with Repetier printer name not matching Cura printer name
+  If you have security turned off, it will pull the apikey from the Repetier instance when you're setting up a new printer.
