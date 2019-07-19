@@ -303,7 +303,7 @@ Cura.MachineAction
                             }
                             else
                             {
-                                return catalog.i18nc("@label", "Checking the API key...")
+                                return catalog.i18nc("@label", "Repetier printer name hasn't been selected, please edit and click get printers and choose the correct name from the drop down list.")
                             }
                         }
                         result += " " + catalog.i18nc("@label", "You can get the API key through the Repetier web page.");
@@ -634,7 +634,7 @@ Cura.MachineAction
                 {
                     model: ListModel
                     {
-                        id: comboPrinters
+                        id: comboPrinters						
                     }
                     currentIndex:
                     {
@@ -656,7 +656,7 @@ Cura.MachineAction
 							editText=comboPrinters.get(currentIndex).key
 						}
                     textRole: "label"
-                    editable: true
+                    editable: false
                     id: repid
                     width: Math.floor(parent.width * 0.4)
                 }
