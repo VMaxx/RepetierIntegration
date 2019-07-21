@@ -186,11 +186,12 @@ class DiscoverRepetierAction(MachineAction):
                 data = base64.b64encode(("%s:%s" % (basic_auth_username, basic_auth_password)).encode()).decode("utf-8")
                 settings_request.setRawHeader("Authorization".encode(), ("Basic %s" % data).encode())
             self._settings_reply = self._network_manager.get(settings_request)
-        else:
-            self.getPrinterList(base_url)
-            if self._settings_reply:
-                self._settings_reply.abort()
-                self._settings_reply = None
+#        else:
+#            Logger.log("d", "Base URL is:" % base_url)
+#            self.getPrinterList(base_url)
+#            if self._settings_reply:
+#                self._settings_reply.abort()
+#                self._settings_reply = None
 
     @pyqtSlot(str)
     def setApiKey(self, api_key):

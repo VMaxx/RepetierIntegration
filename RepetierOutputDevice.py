@@ -99,9 +99,8 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         self._job_prefix = "printer/job/" + self._repetier_id
         self._save_prefix = "printer/model/" + self._repetier_id
         self._api_header = "x-api-key".encode()
-        self._api_key = b""
-
-        self._protocol = "https" if properties.get(b'useHttps') == b"true" else "http"
+        self._api_key = b""        
+        self._protocol = "https" if properties.get(b'useHttps') == b"true" else "http"        
         self._base_url = "%s://%s:%d%s" % (self._protocol, self._address, self._port, self._path)
         self._api_url = self._base_url + self._api_prefix
         self._job_url = self._base_url + self._job_prefix
