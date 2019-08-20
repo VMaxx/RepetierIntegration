@@ -140,13 +140,13 @@ class DiscoverRepetierAction(MachineAction):
             self._network_plugin.reCheckConnections()
 
     @pyqtSlot(result = str)
-    def getInstanceId(self):
+    def getInstanceId(self) -> str:
         global_container_stack = self._application.getGlobalContainerStack()
-        if global_container_stack:
-            meta_data = global_container_stack.getMetaData()
-            if "repetier_id" in meta_data:
-                return global_container_stack.getMetaDataEntry("repetier_id")
-        return ""
+        if not global_container_stack:
+            Logger.log("d", "getInstancdId - self._application.getGlobalContainerStack() returned nothing")
+            return ""
+
+        return global_container_stack.getMetaDataEntry("repetier_id", "")
 
     @pyqtSlot(str)
     def getPrinterList(self, base_url):        
