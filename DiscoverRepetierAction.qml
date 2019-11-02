@@ -9,16 +9,17 @@ import QtQuick.Dialogs 1.1
 
 Cura.MachineAction
 {
-    id: base
-    anchors.fill: parent;
-    property var selectedInstance: null
+    id: base	
+    anchors.fill: parent
+    property var selectedInstance: null	
+	
     Column
     {
         anchors.fill: parent;
+        height : 500
         id: discoverRepetierAction
-
-
-        spacing: UM.Theme.getSize("default_margin").height
+		
+        spacing: UM.Theme.getSize("default_margin").height 
 
         SystemPalette { id: palette }
         UM.I18nCatalog { id: catalog; name:"cura" }
@@ -28,7 +29,7 @@ Cura.MachineAction
             width: parent.width
             text: catalog.i18nc("@title", "Connect to Repetier")
             wrapMode: Text.WordWrap
-            font.pointSize: 18
+            font.pointSize: 14
         }
 
         Label
@@ -85,7 +86,8 @@ Cura.MachineAction
 
         Row
         {
-            width: parent.width
+            width: parent.width			
+			
             spacing: UM.Theme.getSize("default_margin").width
             ScrollView
             {
@@ -156,8 +158,9 @@ Cura.MachineAction
             }
             Column
             {
-                width: Math.floor(parent.width * 0.5)    
-                spacing: UM.Theme.getSize("default_margin").height
+                width: Math.floor(parent.width * 0.5)
+				height : 500
+                spacing: UM.Theme.getSize("default_margin").height 
                 Label
                 {
                     visible: base.selectedInstance != null
@@ -461,13 +464,12 @@ Cura.MachineAction
                     }                
                 }
             }
-        }
+        }		
     }
 
     UM.SettingPropertyProvider
     {
         id: machineGCodeFlavorProvider
-
         containerStackId: Cura.MachineManager.activeMachine.id
         key: "machine_gcode_flavor"
         watchedProperties: [ "value" ]
@@ -488,8 +490,8 @@ Cura.MachineAction
 
         title: catalog.i18nc("@title:window", "Manually added Repetier instance")
 
-        minimumWidth: 400 * screenScaleFactor
-        minimumHeight: (showAdvancedOptions.checked ? 340 : 220) * screenScaleFactor
+        minimumWidth: 400 * screenScaleFactor		
+        minimumHeight: (showAdvancedOptions.checked ? 360 : 240) * screenScaleFactor
         width: minimumWidth
         height: minimumHeight		
 
