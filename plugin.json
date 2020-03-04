@@ -1,9 +1,9 @@
 {
     "name": "Repetier Integration",
     "author": "VMaxx - c/o fieldOfView",
-    "version": "4.3",    
+    "version": "4.4",    
     "minimum_cura_version": "4.0",
-    "maximum_cura_version": "4.4",
+    "maximum_cura_version": "4.5",
     "description": "Enables network printing and monitoring to Repetier",
     "supported_sdk_versions": ["6.0.0","6.1.0","7.0.0"],
     "i18n-catalog": "cura"
