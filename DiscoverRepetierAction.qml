@@ -9,16 +9,17 @@ import QtQuick.Dialogs 1.1
 
 Cura.MachineAction
 {
-    id: base
-    anchors.fill: parent;
-    property var selectedInstance: null
+    id: base	
+    anchors.fill: parent
+    property var selectedInstance: null	
+	
     Column
     {
         anchors.fill: parent;
+        height : 500
         id: discoverRepetierAction
-
-
-        spacing: UM.Theme.getSize("default_margin").height
+		
+        spacing: UM.Theme.getSize("default_margin").height 
 
         SystemPalette { id: palette }
         UM.I18nCatalog { id: catalog; name:"cura" }
@@ -28,7 +29,7 @@ Cura.MachineAction
             width: parent.width
             text: catalog.i18nc("@title", "Connect to Repetier")
             wrapMode: Text.WordWrap
-            font.pointSize: 18
+            font.pointSize: 14
         }
 
         Label
@@ -85,7 +86,8 @@ Cura.MachineAction
 
         Row
         {
-            width: parent.width
+            width: parent.width			
+			
             spacing: UM.Theme.getSize("default_margin").width
             ScrollView
             {
@@ -156,8 +158,9 @@ Cura.MachineAction
             }
             Column
             {
-                width: Math.floor(parent.width * 0.5)    
-                spacing: UM.Theme.getSize("default_margin").height
+                width: Math.floor(parent.width * 0.5)
+				height : 500
+                spacing: UM.Theme.getSize("default_margin").height 
                 Label
                 {
                     visible: base.selectedInstance != null
@@ -324,10 +327,10 @@ Cura.MachineAction
                         id: autoPrintCheckBox
                         text: catalog.i18nc("@label", "Automatically start print job after uploading")
                         enabled: manager.instanceApiKeyAccepted
-                        checked: manager.instanceApiKeyAccepted && Cura.ContainerManager.getContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_auto_print") != "false"
+                        checked: manager.instanceApiKeyAccepted && Cura.ContainerManager.getContainerMetaDataEntry(base.selectedInstance.name, "repetier_auto_print") != "false"
                         onClicked:
                         {
-                            manager.setContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_auto_print", String(checked))
+                            manager.setContainerMetaDataEntry(base.selectedInstance.name, "repetier_auto_print", String(checked))
                         }
                     }
                     CheckBox
@@ -335,10 +338,10 @@ Cura.MachineAction
                         id: showCameraCheckBox
                         text: catalog.i18nc("@label", "Show webcam image")
                         enabled: manager.instanceSupportsCamera
-                        checked: manager.instanceApiKeyAccepted && Cura.ContainerManager.getContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_show_camera") == "true"
+                        checked: manager.instanceApiKeyAccepted && Cura.ContainerManager.getContainerMetaDataEntry(base.selectedInstance.name, "repetier_show_camera") == "true"
                         onClicked:
                         {
-                            manager.setContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_show_camera", String(checked))
+                            manager.setContainerMetaDataEntry(base.selectedInstance.name, "repetier_show_camera", String(checked))
                         }
                     }
                     CheckBox
@@ -346,10 +349,10 @@ Cura.MachineAction
                         id: flipYCheckBox
                         text: catalog.i18nc("@label", "Flip Webcam Y")
                         enabled: manager.instanceSupportsCamera
-                        checked: manager.instanceApiKeyAccepted && Cura.ContainerManager.getContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_webcamflip_y") == "true"
+                        checked: manager.instanceApiKeyAccepted && Cura.ContainerManager.getContainerMetaDataEntry(base.selectedInstance.name, "repetier_webcamflip_y") == "true"
                         onClicked:
                         {
-                            manager.setContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_webcamflip_y", String(checked))
+                            manager.setContainerMetaDataEntry(base.selectedInstance.name, "repetier_webcamflip_y", String(checked))
                         }
                     }
                     CheckBox
@@ -357,10 +360,10 @@ Cura.MachineAction
                         id: flipXCheckBox
                         text: catalog.i18nc("@label", "Flip Webcam X")
                         enabled: manager.instanceSupportsCamera
-                        checked: manager.instanceApiKeyAccepted && Cura.ContainerManager.getContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_webcamflip_x") == "true"
+                        checked: manager.instanceApiKeyAccepted && Cura.ContainerManager.getContainerMetaDataEntry(base.selectedInstance.name, "repetier_webcamflip_x") == "true"
                         onClicked:
                         {
-                            manager.setContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_webcamflip_x", String(checked))
+                            manager.setContainerMetaDataEntry(base.selectedInstance.name, "repetier_webcamflip_x", String(checked))
                         }
                     }
                     CheckBox
@@ -368,10 +371,10 @@ Cura.MachineAction
                         id: rot90CheckBox
                         text: catalog.i18nc("@label", "Rotate Webcam 90")
                         enabled: manager.instanceSupportsCamera
-                        checked: manager.instanceApiKeyAccepted && Cura.ContainerManager.getContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_webcamrot_90") == "true"
+                        checked: manager.instanceApiKeyAccepted && Cura.ContainerManager.getContainerMetaDataEntry(base.selectedInstance.name, "repetier_webcamrot_90") == "true"
                         onClicked:
                         {
-                            manager.setContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_webcamrot_90", String(checked))
+                            manager.setContainerMetaDataEntry(base.selectedInstance.name, "repetier_webcamrot_90", String(checked))
                         }
                     }
                     CheckBox
@@ -379,10 +382,10 @@ Cura.MachineAction
                         id: rot180CheckBox
                         text: catalog.i18nc("@label", "Rotate Webcam 180")
                         enabled: manager.instanceSupportsCamera
-                        checked: manager.instanceApiKeyAccepted && Cura.ContainerManager.getContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_webcamrot_180") == "true"
+                        checked: manager.instanceApiKeyAccepted && Cura.ContainerManager.getContainerMetaDataEntry(base.selectedInstance.name, "repetier_webcamrot_180") == "true"
                         onClicked:
                         {
-                            manager.setContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_webcamrot_180", String(checked))
+                            manager.setContainerMetaDataEntry(base.selectedInstance.name, "repetier_webcamrot_180", String(checked))
                         }
                     }                    
                     CheckBox
@@ -390,10 +393,10 @@ Cura.MachineAction
                         id: rot270CheckBox
                         text: catalog.i18nc("@label", "Rotate Webcam 270")
                         enabled: manager.instanceSupportsCamera
-                        checked: manager.instanceApiKeyAccepted && Cura.ContainerManager.getContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_webcamrot_270") == "true"
+                        checked: manager.instanceApiKeyAccepted && Cura.ContainerManager.getContainerMetaDataEntry(base.selectedInstance.name, "repetier_webcamrot_270") == "true"
                         onClicked:
                         {
-                            manager.setContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_webcamrot_270", String(checked))
+                            manager.setContainerMetaDataEntry(base.selectedInstance.name, "repetier_webcamrot_270", String(checked))
                         }
                     }
                     CheckBox
@@ -401,10 +404,11 @@ Cura.MachineAction
                         id: storeOnSdCheckBox
                         text: catalog.i18nc("@label", "Store G-code on the printer SD card")
                         enabled: manager.instanceSupportsSd
-                        checked: manager.instanceApiKeyAccepted && Cura.ContainerManager.getContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_store_sd") == "true"
+                        checked: manager.instanceApiKeyAccepted && Cura.ContainerManager.getContainerMetaDataEntry(base.selectedInstance.name, "repetier_store_sd") == "true"
                         onClicked:
                         {
-                            manager.setContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_store_sd", String(checked))
+                            //manager.setContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_store_sd", String(checked))
+                            manager.setContainerMetaDataEntry(base.selectedInstance.name, "repetier_store_sd", String(checked))
                         }
                     }
                     Label
@@ -452,19 +456,20 @@ Cura.MachineAction
                                 manager.applyGcodeFlavorFix(fixGcodeFlavor.checked)
                             }							
                             manager.setInstanceId(base.selectedInstance.repetier_id)
+							manager.setContainerMetaDataEntry(base.selectedInstance.name, "repetier_id", lblRepID.text)
+                            manager.setContainerMetaDataEntry(base.selectedInstance.name, "repetier_api_key", apiKey.text)
                             manager.setApiKey(apiKey.text)
                             completed()
                         }
                     }                
                 }
             }
-        }
+        }		
     }
 
     UM.SettingPropertyProvider
     {
         id: machineGCodeFlavorProvider
-
         containerStackId: Cura.MachineManager.activeMachine.id
         key: "machine_gcode_flavor"
         watchedProperties: [ "value" ]
@@ -485,8 +490,8 @@ Cura.MachineAction
 
         title: catalog.i18nc("@title:window", "Manually added Repetier instance")
 
-        minimumWidth: 400 * screenScaleFactor
-        minimumHeight: (showAdvancedOptions.checked ? 340 : 220) * screenScaleFactor
+        minimumWidth: 400 * screenScaleFactor		
+        minimumHeight: (showAdvancedOptions.checked ? 360 : 240) * screenScaleFactor
         width: minimumWidth
         height: minimumHeight		
 
@@ -523,7 +528,7 @@ Cura.MachineAction
                 pathText = "/" + pathText // ensure absolute path
             }
             manager.setManualInstance(nameText, addressText, parseInt(portText), pathText, httpsCheckbox.checked, userNameText, passwordText, repidText)
-			manager.setContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_id", repidText)
+			//manager.setContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_id", repidText)
         }
 
         Column {
@@ -643,7 +648,7 @@ Cura.MachineAction
                         for(var i = 0; i < comboPrinters.length; i++)
                         {
 							if ( typeof comboPrinters.get(i).key !== "undefined" )
-								if(comboPrinters.get(i).key == currentValue) {
+								if( comboPrinters.get(i).key == currentValue ) {
 									index = i;
 									break;
                             }
@@ -652,8 +657,8 @@ Cura.MachineAction
                     }
 					onCurrentIndexChanged:
 						{
-						if ( typeof comboPrinters.get(currentIndex).key !=="undefined" )
-							editText=comboPrinters.get(currentIndex).key
+						if ( typeof comboPrinters.get(currentIndex).key !== "undefined" )
+							editText = comboPrinters.get(currentIndex).key
 						}
                     textRole: "label"
                     editable: false
