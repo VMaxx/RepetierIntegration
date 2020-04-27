@@ -652,7 +652,7 @@ Cura.MachineAction
                     }
 					onCurrentIndexChanged:
 						{
-						if ( typeof comboPrinters.get(currentIndex).key !=="undefined" )
+						if ( typeof comboPrinters.get(currentIndex).key !== "undefined" )
 							editText=comboPrinters.get(currentIndex).key
 						}
                     textRole: "label"

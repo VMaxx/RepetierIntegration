@@ -1,5 +1,5 @@
 # RepetierIntegration
-# Version 4.5
+# Version 4.6
 # Shane Bumpurs
 Cura plugin which enables printing directly to Repetier and monitoring the progress
 The name has changed to RepetierIntegration in the plugin folder.
@@ -34,5 +34,4 @@ How to use
   Config example:
   ![alt text](https://user-images.githubusercontent.com/12956626/59142707-9d0d5e00-8987-11e9-94f7-53bc2707e3d1.jpg "Config") 
   
-  Latest changes: Multiple printers now work.  Fixed issue with Repetier printer name not matching Cura printer name
-  If you have security turned off, it will pull the apikey from the Repetier instance when you're setting up a new printer.
+  Cura has a bug so that if you have ever renamed your printer this plugin won't work.  You'll have to create a new printer from scratch.
