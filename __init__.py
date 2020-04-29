@@ -16,7 +16,8 @@ def getMetaData():
 
 def register(app):
     qmlRegisterType(NetworkMJPGImage.NetworkMJPGImage, "RepetierIntegration", 1, 0, "NetworkMJPGImage")
-        return {
-	        "output_device": RepetierOutputDevicePlugin.RepetierOutputDevicePlugin(),
-	        "machine_action": DiscoverRepetierAction.DiscoverRepetierAction()
-        }    
+
+    return {
+        "output_device": RepetierOutputDevicePlugin.RepetierOutputDevicePlugin(),
+        "machine_action": DiscoverRepetierAction.DiscoverRepetierAction()
+    }
