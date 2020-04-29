@@ -87,7 +87,7 @@ class DiscoverRepetierAction(MachineAction):
     @pyqtSlot()
     def startDiscovery(self):
         if not self._network_plugin:
-            self._network_plugin = cast(RepetierOutputDevicePlugin, self._application.getOutputDeviceManager().getOutputDevicePlugin(self._plugin_id))
+            self._network_plugin = self._application.getOutputDeviceManager().getOutputDevicePlugin(self._plugin_id)
             self._network_plugin.addInstanceSignal.connect(self._onInstanceDiscovery)
             self._network_plugin.removeInstanceSignal.connect(self._onInstanceDiscovery)
             self._network_plugin.instanceListChanged.connect(self._onInstanceDiscovery)
