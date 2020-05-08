@@ -1,5 +1,8 @@
+# Copyright (c) 2020 Aldo Hoeben / fieldOfView & Shane Bumpurs
+# OctoPrintPlugin is released under the terms of the AGPLv3 or higher.
+
 from UM.OutputDevice.OutputDevicePlugin import OutputDevicePlugin
-from . import RepetierOutputDevice
+from .RepetierOutputDevice import RepetierOutputDevice
 
 from .zeroconf import Zeroconf, ServiceBrowser, ServiceStateChange, ServiceInfo
 from UM.Signal import Signal, signalemitter
@@ -11,7 +14,9 @@ from PyQt5.QtCore import QTimer
 import time
 import json
 import re
-
+import base64
+import os.path
+import ipaddress
 
 from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING
 if TYPE_CHECKING:
@@ -22,7 +27,7 @@ if TYPE_CHECKING:
 #       If we discover an instance that has the same key as the active machine instance a connection is made.
 @signalemitter
 class RepetierOutputDevicePlugin(OutputDevicePlugin):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self._zero_conf = None
         self._browser = None
@@ -48,7 +53,7 @@ class RepetierOutputDevicePlugin(OutputDevicePlugin):
 
         self._keep_alive_timer = QTimer()
         self._keep_alive_timer.setInterval(2000)
-        self._keep_alive_timer.setSingleShot(False)
+        self._keep_alive_timer.setSingleShot(True)
         self._keep_alive_timer.timeout.connect(self._keepDiscoveryAlive)
 
     addInstanceSignal = Signal()
@@ -56,25 +61,17 @@ class RepetierOutputDevicePlugin(OutputDevicePlugin):
     instanceListChanged = Signal()
 
     ##  Start looking for devices on network.
-    def start(self):
+    def start(self) -> None:
         self.startDiscovery()
-        self._keep_alive_timer.start()
 
     def startDiscovery(self):
         if self._browser:
             self._browser.cancel()
             self._browser = None
             self._printers = {}
-        self.instanceListChanged.emit()
-
-        try:
-            self._zero_conf = Zeroconf()
-        except Exception:
-            self._zero_conf = None
-            Logger.logException("e", "Failed to create Zeroconf instance. Auto-discovery will not work.")
-
-        if self._zero_conf:
-            self._browser = ServiceBrowser(self._zero_conf, u'_Repetier._tcp.local.', [self._onServiceChanged])
+        instance_keys = list(self._instances.keys())
+        for key in instance_keys:
+            self.removeInstance(key)
 
         # Add manual instances from preference
         for name, properties in self._manual_instances.items():
@@ -88,12 +85,13 @@ class RepetierOutputDevicePlugin(OutputDevicePlugin):
             } # These additional properties use bytearrays to mimick the output of zeroconf
             self.addInstance(name, properties["address"], properties["port"], additional_properties)
 
-    def _keepDiscoveryAlive(self):
+        self.instanceListChanged.emit()
+    def _keepDiscoveryAlive(self) -> None:
         if not self._browser or not self._browser.is_alive():
             Logger.log("w", "Zeroconf discovery has died, restarting discovery of Repetier instances.")
             self.startDiscovery()
 
-    def addManualInstance(self, name, address, port, path, useHttps = False, userName = "", password = "", repetierid=""):
+    def addManualInstance(self, name: str, address: str, port: int, path: str, useHttps: bool = False, userName: str = "", password: str = "", repetierid: str = "")-> None:
         self._manual_instances[name] = {"address": address, "port": port, "path": path, "useHttps": useHttps, "userName": userName, "password": password, "repetier_id":repetierid}
         self._preferences.setValue("Repetier/manual_instances", json.dumps(self._manual_instances))
 
@@ -105,7 +103,7 @@ class RepetierOutputDevicePlugin(OutputDevicePlugin):
         self.addInstance(name, address, port, properties)
         self.instanceListChanged.emit()
 
-    def removeManualInstance(self, name):
+    def removeManualInstance(self, name: str) -> None:
         if name in self._instances:
             self.removeInstance(name)
             self.instanceListChanged.emit()
@@ -115,16 +113,25 @@ class RepetierOutputDevicePlugin(OutputDevicePlugin):
             self._preferences.setValue("Repetier/manual_instances", json.dumps(self._manual_instances))
 
     ##  Stop looking for devices on network.
-    def stop(self):
-        self._browser.cancel()
-        self._browser = None
+    def stop(self) -> None:
+        self._keep_alive_timer.stop()
+        if self._browser:
+            self._browser.cancel()
+        self._browser = None # type: Optional[ServiceBrowser]
         if self._zero_conf:
             self._zero_conf.close()
 
-    def getInstances(self):
+    def getInstances(self) -> Dict[str, Any]:
         return self._instances
 
-    def reCheckConnections(self):
+    def getInstanceById(self, instance_id: str) -> Optional[RepetierOutputDevice]:
+        instance = self._instances.get(instance_id, None)
+        if instance:
+            return instance
+        Logger.log("w", "No instance found with id %s", instance_id)
+        return None
+
+    def reCheckConnections(self) -> None:
         global_container_stack = Application.getInstance().getGlobalContainerStack()
         if not global_container_stack:
             return
@@ -133,7 +140,7 @@ class RepetierOutputDevicePlugin(OutputDevicePlugin):
             if key == global_container_stack.getMetaDataEntry("id"):
                 api_key = global_container_stack.getMetaDataEntry("repetier_api_key", "")
                 self._instances[key].setApiKey(api_key)
-                self._instances[key].setShowCamera(parseBool(global_container_stack.getMetaDataEntry("repetier_show_camera", "false")))
+                self._instances[key].setShowCamera(parseBool(global_container_stack.getMetaDataEntry("repetier_show_camera", "true")))
                 self._instances[key].connectionStateChanged.connect(self._onInstanceConnectionStateChanged)
                 self._instances[key].connect()
             else:
@@ -141,17 +148,18 @@ class RepetierOutputDevicePlugin(OutputDevicePlugin):
                     self._instances[key].close()
 
     ##  Because the model needs to be created in the same thread as the QMLEngine, we use a signal.
-    def addInstance(self, name, address, port, properties):
-        instance = RepetierOutputDevice.RepetierOutputDevice(name, address, port, properties)
+    def addInstance(self, name: str, address: str, port: int, properties: Dict[bytes, bytes]) -> None:
+        instance = RepetierOutputDevice(name, address, port, properties)
         self._instances[instance.getId()] = instance
-##        global_container_stack = Application.getInstance().getGlobalContainerStack()
-##        if global_container_stack and instance.getId() == global_container_stack.getMetaDataEntry("id"):
-##            if api_key:
-##                instance.setApiKey(api_key)
-##                instance.connectionStateChanged.connect(self._onInstanceConnectionStateChanged)            
-##                instance.connect()
+        global_container_stack = Application.getInstance().getGlobalContainerStack()
+        if global_container_stack and instance.getId() == global_container_stack.getMetaDataEntry("id"):
+            api_key = global_container_stack.getMetaDataEntry("repetier_api_key", "")
+            instance.setApiKey(api_key)
+            instance.setShowCamera(parseBool(global_container_stack.getMetaDataEntry("repetier_show_camera", "true")))
+            instance.connectionStateChanged.connect(self._onInstanceConnectionStateChanged)
+            instance.connect()
 
-    def removeInstance(self, name):
+    def removeInstance(self, name: str) -> None:
         instance = self._instances.pop(name, None)
         if instance:
             if instance.isConnected():
@@ -159,7 +167,7 @@ class RepetierOutputDevicePlugin(OutputDevicePlugin):
                 instance.disconnect()
 
     ##  Handler for when the connection state of one of the detected instances changes
-    def _onInstanceConnectionStateChanged(self, key):
+    def _onInstanceConnectionStateChanged(self, key: str) -> None:
         if key not in self._instances:
             return
 
@@ -169,7 +177,7 @@ class RepetierOutputDevicePlugin(OutputDevicePlugin):
             self.getOutputDeviceManager().removeOutputDevice(key)
 
     ##  Handler for zeroConf detection
-    def _onServiceChanged(self, zeroconf: Zeroconf, service_type, name, state_change):
+    def _onServiceChanged(self, zeroconf: Zeroconf, service_type: str, name: str, state_change: ServiceStateChange):
         if state_change == ServiceStateChange.Added:
             key = name
             result = self._name_regex.match(name)
@@ -182,26 +190,36 @@ class RepetierOutputDevicePlugin(OutputDevicePlugin):
             Logger.log("d", "Bonjour service added: %s" % name)
 
             # First try getting info from zeroconf cache
-            info = ServiceInfo(service_type, key, properties = {})
+            info = ServiceInfo(service_type, key)
             for record in zeroconf.cache.entries_with_name(key.lower()):
                 info.update_record(zeroconf, time.time(), record)
 
+            address = ""
             for record in zeroconf.cache.entries_with_name(info.server):
                 info.update_record(zeroconf, time.time(), record)
-                if info.address and info.address[:2] != b'\xa9\xfe': # don't accept 169.254.x.x address
+                try:
+                    ip = ipaddress.IPv4Address(record.address) # IPv4
+                except ipaddress.AddressValueError:
+                    ip = ipaddress.IPv6Address(record.address) # IPv6
+                except:
+                    continue
+
+                if not ip.is_link_local: # don't accept 169.254.x.x address
+                    address = str(ip) if ip.version == 4 else "[%s]" % str(ip)
                     break
 
             # Request more data if info is not complete
-            if not info.address or not info.port:
+            if not address or not info.port:
                 Logger.log("d", "Trying to get address of %s", name)
-                info = zeroconf.get_service_info(service_type, key)
+                requested_info = zeroconf.get_service_info(service_type, key)
 
-                if not info:
+                if not requested_info:
                     Logger.log("w", "Could not get information about %s" % name)
                     return
 
-            if info.address and info.port:
-                address = '.'.join(map(lambda n: str(n), info.address))
+                info = requested_info
+
+            if address and info.port:
                 self.addInstanceSignal.emit(name, address, info.port, info.properties)
             else:
                 Logger.log("d", "Discovered instance named %s but received no address", name)

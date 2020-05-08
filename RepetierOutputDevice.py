@@ -1,3 +1,5 @@
+# Copyright (c) 2020 Aldo Hoeben / fieldOfView & Shane Bumpurs
+# RepetierPlugin is released under the terms of the AGPLv3 or higher.
 
 from UM.i18n import i18nCatalog
 from UM.Logger import Logger
@@ -16,7 +18,8 @@ from cura.PrinterOutput.Models.PrintJobOutputModel import PrintJobOutputModel
 
 from cura.PrinterOutput.GenericOutputController import GenericOutputController
 
-from PyQt5.QtNetwork import QHttpMultiPart, QHttpPart, QNetworkRequest, QNetworkAccessManager, QNetworkReply
+from PyQt5.QtNetwork import QHttpMultiPart, QHttpPart, QNetworkRequest, QNetworkAccessManager
+from PyQt5.QtNetwork import QNetworkReply, QSslConfiguration, QSslSocket
 from PyQt5.QtCore import QUrl, QTimer, pyqtSignal, pyqtProperty, pyqtSlot, QCoreApplication
 from PyQt5.QtGui import QImage, QDesktopServices
 
@@ -26,7 +29,7 @@ import re
 import datetime
 from time import time
 import base64
-from io import StringIO
+from io import StringIO, BytesIO
 from enum import IntEnum
 
 from typing import cast, Any, Callable, Dict, List, Optional, Union, TYPE_CHECKING
@@ -55,8 +58,8 @@ class UnifiedConnectionState(IntEnum):
 #  Repetier connected (wifi / lan) printer using the Repetier API
 @signalemitter
 class RepetierOutputDevice(NetworkedPrinterOutputDevice):
-    def __init__(self, instance_id: str, address: str, port: int, properties: dict, parent = None) -> None:
-        super().__init__(device_id = instance_id, address = address, properties = properties, parent = parent)
+    def __init__(self, instance_id: str, address: str, port: int, properties: dict, **kwargs) -> None:
+        super().__init__(device_id = instance_id, address = address, properties = properties, **kwargs)
 
         self._address = address
         self._port = port
@@ -147,7 +150,7 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         self._update_timer.setSingleShot(False)
         self._update_timer.timeout.connect(self._update)
 
-        self._show_camera = False
+        self._show_camera = True
         self._camera_mirror = False
         self._camera_rotation = 0
         self._camera_url = ""
@@ -186,6 +189,11 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         return self._name
 
     #  Name of the printer in repetier
+    additionalDataChanged = pyqtSignal()
+    @pyqtProperty(str, notify=additionalDataChanged)
+    def RepetierVersion(self) -> str:
+        return self._repetier_version
+	
     @pyqtProperty(str, constant = True)
     def repetier_id(self) -> str:
         return self._repetier_id
@@ -205,7 +213,7 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         return self._address
 
     # IP address of this instance
-    @pyqtProperty(str, constant=True)
+    @pyqtProperty(str, notify=additionalDataChanged)
     def address(self) -> str:
         return self._address
 
@@ -258,21 +266,7 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         # Request print_job data
         #self.get("getPrinterConfig", self._onRequestFinished)
 
-    def _createEmptyRequest(self, target: str, content_type: Optional[str] = "application/json") -> QNetworkRequest:
-        if "upload" in target:
-             if self._forced_queue or not self._auto_print:
-                  request = QNetworkRequest(QUrl(self._save_url + "?a=" + target))
-             else:
-                  request = QNetworkRequest(QUrl(self._job_url + "?a=" + target))
-        else:
-             request = QNetworkRequest(QUrl(self._api_url + "?a=" + target))
-        request.setRawHeader(self._user_agent_header, self._user_agent.encode())
-        request.setRawHeader(self._api_header, self._api_key)
-        if content_type is not None:
-            request.setHeader(QNetworkRequest.ContentTypeHeader, "application/json")
-        if self._basic_auth_data:
-            request.setRawHeader(self._basic_auth_header, self._basic_auth_data)
-        return request
+
 
     def close(self) -> None:
         self.setConnectionState(cast(ConnectionState, UnifiedConnectionState.Closed))
@@ -317,9 +311,6 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         self.close()
 
     def pausePrint(self) -> None:
-        if not self._printers[0].activePrintJob:
-            return
-        #Logger.log("d", "Pause attempted: %s ", self._printers[0].activePrintJob.state)
         self._sendJobCommand("pause")
 
     def resumePrint(self) -> None:
@@ -352,21 +343,57 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
 
         if self.activePrinter.state not in ["idle", ""]:
             Logger.log("d", "Tried starting a print, but current state is %s" % self.activePrinter.state)
+            error_string = ""
             if not self._auto_print:
                 # allow queueing the job even if Repetier is currently busy if autoprinting is disabled
                 self._error_message = None
             elif self.activePrinter.state == "offline":
-                self._error_message = Message(i18n_catalog.i18nc("@info:status", "The printer is offline. Unable to start a new job."))
+                error_string = Message(i18n_catalog.i18nc("@info:status", "The printer is offline. Unable to start a new job."))
             else:
-                self._error_message = Message(i18n_catalog.i18nc("@info:status", "Repetier is busy. Unable to start a new job."))
+                error_string = Message(i18n_catalog.i18nc("@info:status", "Repetier is busy. Unable to start a new job."))
 
-            if self._error_message:
-                self._error_message.addAction("Queue", i18n_catalog.i18nc("@action:button", "Queue job"), None, i18n_catalog.i18nc("@action:tooltip", "Queue this print job so it can be printed later"))
+            if error_string:
+                if self._error_message:
+                    self._error_message.hide()
+                self._error_message = Message(error_string, title=i18n_catalog.i18nc("@label", "Repetier error"))
+                self._error_message.addAction(
+                    "queue", i18n_catalog.i18nc("@action:button", "Queue job"), "",
+                    i18n_catalog.i18nc("@action:tooltip", "Queue this print job so it can be printed later")
+                )
                 self._error_message.actionTriggered.connect(self._queuePrint)
                 self._error_message.show()
                 return
 
         self._startPrint()
+
+    def _stopWaitingForAnalysis(self, message_id: Optional[str] = None, action_id: Optional[str] = None) -> None:
+        if self._waiting_message:
+            self._waiting_message.hide()
+        self._waiting_for_analysis = False
+
+        for end_point in self._polling_end_points:
+            if "files/" in end_point:
+                break
+        if "files/" not in end_point:
+            Logger.log("e", "Could not find files/ endpoint")
+            return
+
+        self._polling_end_points = [point for point in self._polling_end_points if not point.startswith("files/")]
+
+        if action_id == "print":
+            self._selectAndPrint(end_point)
+        elif action_id == "cancel":
+            pass
+
+    def _stopWaitingForPrinter(self, message_id: Optional[str] = None, action_id: Optional[str] = None) -> None:
+        if self._waiting_message:
+            self._waiting_message.hide()
+        self._waiting_for_printer = False
+
+        if action_id == "queue":
+            self._queuePrint()
+        elif action_id == "cancel":
+            self._gcode_stream = StringIO()  # type: Union[StringIO, BytesIO]
 
     def _queuePrint(self, message_id: Optional[str] = None, action_id: Optional[str] = None) -> None:
         if self._error_message:
@@ -389,8 +416,15 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                 # stopPreheatTimers was added after Cura 3.3 beta
                 pass
 
-        self._progress_message = Message(i18n_catalog.i18nc("@info:status", "Sending data to Repetier"), 0, False, -1)
-        self._progress_message.addAction("Cancel", i18n_catalog.i18nc("@action:button", "Cancel"), "", "")
+        self._progress_message = Message(
+            i18n_catalog.i18nc("@info:status", "Sending data to Repetier"),
+            title=i18n_catalog.i18nc("@label", "Repetier"),
+            progress=-1, lifetime=0, dismissable=False, use_inactivity_timer=False
+        )
+        self._progress_message.addAction(
+            "cancel", i18n_catalog.i18nc("@action:button", "Cancel"), "",
+            i18n_catalog.i18nc("@action:tooltip", "Abort the printjob")
+        )
         self._progress_message.actionTriggered.connect(self._cancelSendGcode)
         self._progress_message.show()
 
@@ -428,16 +462,18 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
             #  Post request + data
             #post_request = self._createApiRequest("files/" + destination)
             post_request = self._createEmptyRequest("upload&name=%s" % file_name)
-            self._post_reply = self.postFormWithParts("upload&name=%s" % file_name, post_parts, on_finished=self._onRequestFinished, on_progress=self._onUploadProgress)
+            self._post_reply = self.postFormWithParts("upload&name=%s" % file_name, post_parts, on_finished=self._onUploadFinished, on_progress=self._onUploadProgress)
             #self._post_reply = self._manager.post(post_request, self._post_multi_part)
             #self._post_reply.uploadProgress.connect(self._onUploadProgress)
 
-        except IOError:
-            self._progress_message.hide()
-            self._error_message = Message(i18n_catalog.i18nc("@info:status", "Unable to send data to Repetier."))
-            self._error_message.show()
+
         except Exception as e:
             self._progress_message.hide()
+            self._error_message = Message(
+                i18n_catalog.i18nc("@info:status", "Unable to send data to Repetier."),
+                title=i18n_catalog.i18nc("@label", "Repetier error")
+            )
+            self._error_message.show()
             Logger.log("e", "An exception occurred in network connection: %s" % str(e))
 
         self._gcode_stream = StringIO()
@@ -457,7 +493,7 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
 
     def sendCommand(self, command: str) -> None:
         self._queued_gcode_commands.append(command)
-        self._queued_gcode_timer.start()
+        CuraApplication.getInstance().callLater(self._sendQueuedGcode)
 
     # Send gcode commands that are queued in quick succession as a single batch
     def _sendQueuedGcode(self) -> None:
@@ -491,19 +527,6 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         #Logger.log("d", "_sendCommandToAPI: %s", data)
         self._command_reply = self._manager.post(command_request, data.encode())
 
-    # Overloaded from NetworkedPrinterOutputDevice.post() to backport https://github.com/Ultimaker/Cura/pull/4678
-    def post(self, target: str, data: str, on_finished: Optional[Callable[[QNetworkReply], None]], on_progress: Callable = None) -> None:
-        self._validateManager()
-        request = self._createEmptyRequest(target)
-        self._last_request_time = time()
-        if self._manager is not None:
-            reply = self._manager.post(request, data.encode())
-            if on_progress is not None:
-                reply.uploadProgress.connect(on_progress)
-            self._registerOnFinishedCallback(reply, on_finished)
-        else:
-            Logger.log("e", "Could not find manager.")
-
         #  Handler for all requests that have finished.
     def _onRequestFinished(self, reply: QNetworkReply) -> None:
         global_container_stack = CuraApplication.getInstance().getGlobalContainerStack()
@@ -516,7 +539,8 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
             self.setConnectionText(i18n_catalog.i18nc("@info:status", "Repetier Connection to printer failed"))
             return
 
-        if self._connection_state_before_timeout and reply.error() == QNetworkReply.NoError:  #  There was a timeout, but we got a correct answer again.
+        if self._connection_state_before_timeout and reply.error() == QNetworkReply.NoError:
+            #  There was a timeout, but we got a correct answer again.
             if self._last_response_time:
                 Logger.log("d", "We got a response from the instance after %s of silence", time() - self._last_response_time)
             self.setConnectionState(self._connection_state_before_timeout)
@@ -768,7 +792,7 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                                     self._camera_rotation = 180
                                 if parseBool(global_container_stack.getMetaDataEntry("repetier_webcamrot_270", False)):
                                     self._camera_rotation = 270                                
-                                #self.cameraOrientationChanged.emit()
+                                self.cameraUrlChanged.emit()
         elif reply.operation() == QNetworkAccessManager.PostOperation:
             if self._api_prefix + "?a=listModels" in reply.url().toString():  # Result from /files command:
                 if http_status_code == 201:
@@ -822,17 +846,19 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
             # timeout responses if this happens.
             self._last_response_time = time()
 
-            progress = bytes_sent / bytes_total * 100            
+            progress = bytes_sent / bytes_total * 100
             previous_progress = self._progress_message.getProgress()
             if progress < 100:
                 if previous_progress is not None and progress > previous_progress:
                     self._progress_message.setProgress(progress)
             else:
                 self._progress_message.hide()
-                self._progress_message = Message(i18n_catalog.i18nc("@info:status", "Storing data on Repetier"), 0, False, -1)
+                self._progress_message = Message(
+                    i18n_catalog.i18nc("@info:status", "Storing data on Repetier"), 0, False, -1, title=i18n_catalog.i18nc("@label", "Repetier")
+                )
                 self._progress_message.show()
         else:
-            self._progress_message.setProgress(0)        
+            self._progress_message.setProgress(0)
 
     def _printerindex(self, jsonstr:str, repetier_id:str) -> int:
         count = 0
@@ -843,6 +869,80 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                     return count
             count=count+1
         return rv        
+    def _onUploadFinished(self, reply: QNetworkReply) -> None:
+        reply.uploadProgress.disconnect(self._onUploadProgress)
+
+        Logger.log("d", "_onUploadFinished %s", reply.url().toString())
+        if self._progress_message:
+            self._progress_message.hide()
+
+        http_status_code = reply.attribute(QNetworkRequest.HttpStatusCodeAttribute)
+        Logger.log("d", "_onUploadFinished http_status_code=%d", http_status_code)		
+        error_string = ""
+        if http_status_code == 401:
+            error_string = i18n_catalog.i18nc("@info:error", "You are not allowed to upload files to Repetier with the configured API key.")
+
+        elif http_status_code == 409:
+            if "files/sdcard/" in reply.url().toString():
+                error_string = i18n_catalog.i18nc("@info:error", "Can't store the printjob on the printer sd card.")
+            else:
+                error_string = i18n_catalog.i18nc("@info:error", "Can't store the printjob with the same name as the one that is currently printing.")
+
+        elif ((http_status_code != 201) and (http_status_code != 200)):
+            error_string = bytes(reply.readAll()).decode("utf-8")
+            if not error_string:
+                error_string = reply.attribute(QNetworkRequest.HttpReasonPhraseAttribute)
+
+        if error_string:
+            self._showErrorMessage(error_string)
+            Logger.log("e", "RepetierOutputDevice got an error uploading %s", reply.url().toString())
+            Logger.log("e", error_string)
+            return
+
+        location_url = reply.header(QNetworkRequest.LocationHeader)
+        Logger.log("d", "Resource created on Repetier instance: %s", location_url.toString())
+
+        if self._forced_queue or not self._auto_print:
+            if location_url:
+                file_name = location_url.fileName()
+                message = Message(i18n_catalog.i18nc("@info:status", "Saved to Repetier as {0}").format(file_name))
+            else:
+                message = Message(i18n_catalog.i18nc("@info:status", "Saved to Repetier"))
+            message.setTitle(i18n_catalog.i18nc("@label", "Repetier"))
+            message.addAction(
+                "open_browser", i18n_catalog.i18nc("@action:button", "Repetier..."), "globe",
+                i18n_catalog.i18nc("@info:tooltip", "Open the Repetier web interface")
+            )
+            message.actionTriggered.connect(self._openRepetier)
+            message.show()
+        elif self._auto_print:
+            end_point = location_url.toString().split(self._api_prefix, 1)[1]
+            if self._ufp_supported and end_point.endswith(".ufp"):
+                end_point += ".gcode"
+
+            if not self._wait_for_analysis:
+                self._selectAndPrint(end_point)
+                return
+
+            self._waiting_message = Message(
+                i18n_catalog.i18nc("@info:status", "Waiting for Repetier to complete Gcode analysis..."),
+                title=i18n_catalog.i18nc("@label", "Repetier"),
+                progress=-1, lifetime=0, dismissable=False, use_inactivity_timer=False
+            )
+            self._waiting_message.addAction(
+                "print", i18n_catalog.i18nc("@action:button", "Print now"), "",
+                i18n_catalog.i18nc("@action:tooltip", "Stop waiting for the Gcode analysis and start printing immediately"),
+                button_style=Message.ActionButtonStyle.SECONDARY
+            )
+            self._waiting_message.addAction(
+                "cancel", i18n_catalog.i18nc("@action:button", "Cancel"), "",
+                i18n_catalog.i18nc("@action:tooltip", "Abort the printjob")
+            )
+            self._waiting_message.actionTriggered.connect(self._stopWaitingForAnalysis)
+            self._waiting_message.show()
+
+            self._waiting_for_analysis = True
+            self._polling_end_points.append(end_point)  # start polling the API for information about this file
 
     def _createPrinterList(self) -> None:
         printer = PrinterOutputModel(output_controller=self._output_controller, number_of_extruders=self._number_of_extruders)
@@ -850,5 +950,93 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         self._printers = [printer]
         self.printersChanged.emit()
 
+    def _selectAndPrint(self, end_point: str) -> None:
+        command = {
+            "command": "select",
+            "print": True
+        }
+        self._sendCommandToApi(end_point, command)
+
+    def _showErrorMessage(self, error_string: str) -> None:
+        if self._error_message:
+            self._error_message.hide()
+        self._error_message = Message(error_string, title=i18n_catalog.i18nc("@label", "Repetier error"))
+        self._error_message.show()
+
     def _openRepetierPrint(self, message_id: Optional[str] = None, action_id: Optional[str] = None) -> None:
         QDesktopServices.openUrl(QUrl(self._base_url))
+
+    def _createEmptyRequest(self, target: str, content_type: Optional[str] = "application/json") -> QNetworkRequest:
+        if "upload" in target:
+             if self._forced_queue or not self._auto_print:
+                  request = QNetworkRequest(QUrl(self._save_url + "?a=" + target))
+             else:
+                  request = QNetworkRequest(QUrl(self._job_url + "?a=" + target))
+        else:	
+             request = QNetworkRequest(QUrl(self._api_url + "?a=" + target))
+        request.setAttribute(QNetworkRequest.FollowRedirectsAttribute, True)
+
+        request.setRawHeader(b"X-Api-Key", self._api_key)
+        request.setRawHeader(b"User-Agent", self._user_agent.encode())
+
+        if content_type is not None:
+            request.setHeader(QNetworkRequest.ContentTypeHeader, content_type)
+
+        # ignore SSL errors (eg for self-signed certificates)
+        ssl_configuration = QSslConfiguration.defaultConfiguration()
+        ssl_configuration.setPeerVerifyMode(QSslSocket.VerifyNone)
+        request.setSslConfiguration(ssl_configuration)
+
+        if self._basic_auth_data:
+            request.setRawHeader(b"Authorization", self._basic_auth_data)
+
+        return request
+
+    # This is a patched version from NetworkedPrinterOutputdevice, which adds "form_data" instead of "form-data"
+    def _createFormPart(self, content_header: str, data: bytes, content_type: Optional[str] = None) -> QHttpPart:
+        part = QHttpPart()
+
+        if not content_header.startswith("form-data;"):
+            content_header = "form-data; " + content_header
+        part.setHeader(QNetworkRequest.ContentDispositionHeader, content_header)
+        if content_type is not None:
+            part.setHeader(QNetworkRequest.ContentTypeHeader, content_type)
+
+        part.setBody(data)
+        return part
+
+    ## Overloaded from NetworkedPrinterOutputDevice.get() to be permissive of
+    #  self-signed certificates
+    def get(self, url: str, on_finished: Optional[Callable[[QNetworkReply], None]]) -> None:
+        Logger.log("d", "get request: %s", url)
+        self._validateManager()
+
+        request = self._createEmptyRequest(url)
+        self._last_request_time = time()
+
+        if not self._manager:
+            Logger.log("e", "No network manager was created to execute the GET call with.")
+            return
+
+        reply = self._manager.get(request)
+        self._registerOnFinishedCallback(reply, on_finished)
+
+    ## Overloaded from NetworkedPrinterOutputDevice.post() to backport https://github.com/Ultimaker/Cura/pull/4678
+    #  and allow self-signed certificates
+    def post(self, url: str, data: Union[str, bytes],
+             on_finished: Optional[Callable[[QNetworkReply], None]],
+             on_progress: Optional[Callable[[int, int], None]] = None) -> None:
+        self._validateManager()
+
+        request = self._createEmptyRequest(url)
+        self._last_request_time = time()
+
+        if not self._manager:
+            Logger.log("e", "Could not find manager.")
+            return
+
+        body = data if isinstance(data, bytes) else data.encode()  # type: bytes
+        reply = self._manager.post(request, body)
+        if on_progress is not None:
+            reply.uploadProgress.connect(on_progress)
+        self._registerOnFinishedCallback(reply, on_finished)

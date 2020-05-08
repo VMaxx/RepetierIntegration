@@ -1,5 +1,5 @@
 import UM 1.2 as UM
-import Cura 1.0 as Cura
+import Cura 1.1 as Cura
 
 import QtQuick 2.2
 import QtQuick.Controls 1.1
@@ -12,6 +12,43 @@ Cura.MachineAction
     id: base
     anchors.fill: parent;
     property var selectedInstance: null
+    property string activeMachineId:
+    {
+        if (Cura.MachineManager.activeMachineId != undefined)
+        {
+            return Cura.MachineManager.activeMachineId;
+        }
+        else if (Cura.MachineManager.activeMachine !== null)
+        {
+            return Cura.MachineManager.activeMachine.id;
+        }
+
+        CuraApplication.log("There does not seem to be an active machine");
+        return "";
+    }
+
+    onVisibleChanged:
+    {
+        if(!visible)
+        {
+            manager.cancelApiKeyRequest();
+        }
+    }
+
+    function boolCheck(value) //Hack to ensure a good match between python and qml.
+    {
+        if(value == "True")
+        {
+            return true
+        }else if(value == "False" || value == undefined)
+        {
+            return false
+        }
+        else
+        {
+            return value
+        }
+    }
     Column
     {
         anchors.fill: parent;
@@ -19,18 +56,34 @@ Cura.MachineAction
 
 
         spacing: UM.Theme.getSize("default_margin").height
+        width: parent.width
 
         SystemPalette { id: palette }
         UM.I18nCatalog { id: catalog; name:"cura" }
-        Label
-        {
-            id: pageTitle
-            width: parent.width
-            text: catalog.i18nc("@title", "Connect to Repetier")
-            wrapMode: Text.WordWrap
-            font.pointSize: 18
-        }
 
+        Item
+        {
+            width: parent.width
+            height: pageTitle.height
+
+            Label
+            {
+                id: pageTitle
+                text: catalog.i18nc("@title", "Connect to Repetier")
+                wrapMode: Text.WordWrap
+                font.pointSize: 18
+            }
+
+            Label
+            {
+                id: pluginVersion
+                anchors.bottom: pageTitle.bottom
+                anchors.right: parent.right
+                text: manager.pluginVersion
+                wrapMode: Text.WordWrap
+                font.pointSize: 8
+            }
+        }
         Label
         {
             id: pageDescription
@@ -60,10 +113,12 @@ Cura.MachineAction
                 enabled: base.selectedInstance != null && base.selectedInstance.getProperty("manual") == "true"
                 onClicked:
                 {
-                    manualPrinterDialog.showDialog(base.selectedInstance.name, base.selectedInstance.ipAddress,
-                                                   base.selectedInstance.port, base.selectedInstance.path,
-                                                   base.selectedInstance.getProperty("useHttps") == "true",
-                                                   base.selectedInstance.getProperty("userName"), base.selectedInstance.getProperty("password"),Cura.ContainerManager.getContainerMetaDataEntry(base.selectedInstance.name, "repetier_id"));
+                    manualPrinterDialog.showDialog(
+                        base.selectedInstance.name, base.selectedInstance.ipAddress,
+                        base.selectedInstance.port, base.selectedInstance.path,
+                        base.selectedInstance.getProperty("useHttps") == "true",
+                        base.selectedInstance.getProperty("userName"), base.selectedInstance.getProperty("password"),Cura.ContainerManager.getContainerMetaDataEntry(base.selectedInstance.name, "repetier_id")
+                    );
                 }
             }
 
@@ -87,76 +142,87 @@ Cura.MachineAction
         {
             width: parent.width
             spacing: UM.Theme.getSize("default_margin").width
-            ScrollView
+
+            Item
             {
-                id: objectListContainer
-                frameVisible: true
-                width: Math.floor(parent.width * 0.5)    
+                width: Math.floor(parent.width * 0.4)
                 height: base.height - parent.y
 
-                Rectangle
+                ScrollView
                 {
-                    parent: viewport
-                    anchors.fill: parent
-                    color: palette.light
-                }
-
-                ListView
-                {
-                    id: listview
-                    model: manager.discoveredInstances
-                    onModelChanged:
-                    {
-                        var selectedId = manager.getInstanceId();
-                        for(var i = 0; i < model.length; i++) {
-                            if(model[i].getId() == selectedId)
-                            {
-                                currentIndex = i;
-                                return
-                            }
-                        }
-                        currentIndex = -1;
-                    }
+                    id: objectListContainer
+                    frameVisible: true
                     width: parent.width
-                    currentIndex: activeIndex
-                    onCurrentIndexChanged:
-                    {
-                        base.selectedInstance = listview.model[currentIndex];
-                        apiCheckDelay.throttledCheck();
-                    }
-                    Component.onCompleted: manager.startDiscovery()
-                    delegate: Rectangle
-                    {
-                        height: childrenRect.height
-                        color: ListView.isCurrentItem ? palette.highlight : index % 2 ? palette.base : palette.alternateBase
-                        width: parent.width
-                        Label
-                        {
-                            anchors.left: parent.left
-                            anchors.leftMargin: UM.Theme.getSize("default_margin").width
-                            anchors.right: parent.right
-                            text: listview.model[index].name
-                            color: parent.ListView.isCurrentItem ? palette.highlightedText : palette.text
-                            elide: Text.ElideRight
-                        }
+                    anchors.top: parent.top
+                    anchors.bottom: objectListFooter.top
+                    anchors.bottomMargin: UM.Theme.getSize("default_margin").height
 
-                        MouseArea
+                    Rectangle
+                    {
+                        parent: viewport
+                        anchors.fill: parent
+                        color: palette.light
+                    }
+
+                    ListView
+                    {
+                        id: listview
+                        model: manager.discoveredInstances
+                        onModelChanged:
                         {
-                            anchors.fill: parent;
-                            onClicked:
-                            {
-                                if(!parent.ListView.isCurrentItem)
+                            var selectedId = manager.getInstanceId();
+                            for(var i = 0; i < model.length; i++) {
+                                if(model[i].getId() == selectedId)
                                 {
-                                    parent.ListView.view.currentIndex = index;
+                                    currentIndex = i;
+                                    return
+                                }
+                            }
+                            currentIndex = -1;
+                        }
+                        width: parent.width
+                        currentIndex: activeIndex
+                        onCurrentIndexChanged:
+                        {
+                            base.selectedInstance = listview.model[currentIndex];
+                            apiCheckDelay.throttledCheck();
+                        }
+                        Component.onCompleted: manager.startDiscovery()
+                        delegate: Rectangle
+                        {
+                            height: childrenRect.height
+                            color: ListView.isCurrentItem ? palette.highlight : index % 2 ? palette.base : palette.alternateBase
+                            width: parent.width
+                            Label
+                            {
+                                anchors.left: parent.left
+                                anchors.leftMargin: UM.Theme.getSize("default_margin").width
+                                anchors.right: parent.right
+                                text: listview.model[index].name
+                                color: parent.ListView.isCurrentItem ? palette.highlightedText : palette.text
+                                elide: Text.ElideRight
+                                font.italic: listview.model[index].key == manager.instanceId
+                            }
+
+                            MouseArea
+                            {
+                                anchors.fill: parent;
+                                onClicked:
+                                {
+                                    if(!parent.ListView.isCurrentItem)
+                                    {
+                                        parent.ListView.view.currentIndex = index;
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
+
             Column
             {
-                width: Math.floor(parent.width * 0.5)    
+                width: Math.floor(parent.width * 0.6)    
                 spacing: UM.Theme.getSize("default_margin").height
                 Label
                 {
@@ -173,15 +239,16 @@ Cura.MachineAction
                     width: parent.width
                     columns: 2
                     rowSpacing: UM.Theme.getSize("default_lining").height
+                    verticalItemAlignment: Grid.AlignVCenter
                     Label
                     {
-                        width: Math.floor(parent.width * 0.2)    
+                        width: Math.floor(parent.width * 0.2)
                         wrapMode: Text.WordWrap
                         text: catalog.i18nc("@label", "Version")
                     }
                     Label
                     {
-                        width: Math.floor(parent.width * 0.75)    
+                        width: Math.floor(parent.width * 0.75)
                         wrapMode: Text.WordWrap
                         text: base.selectedInstance ? base.selectedInstance.repetierVersion : ""
                     }
@@ -263,7 +330,7 @@ Cura.MachineAction
                             if(base.selectedInstance != null)
                             if(base.selectedInstance.baseURL != null)
                             {
-                                 manager.testApiKey(base.selectedInstance.baseURL, apiKey.text, base.selectedInstance.getProperty("userName"), base.selectedInstance.getProperty("password"), lblRepID.text)
+                                 manager.testApiKey(base.selectedInstance.getId(),base.selectedInstance.baseURL, apiKey.text, base.selectedInstance.getProperty("userName"), base.selectedInstance.getProperty("password"), lblRepID.text)
                                  checkOnTrigger = false;
                                  restart();
                             }
@@ -557,14 +624,14 @@ Cura.MachineAction
                 Label
                 {
                     text: catalog.i18nc("@label","IP Address or Hostname")
-                    width: Math.floor(parent.width * 0.4)    
+                    width: Math.floor(parent.width * 0.4)
                 }
 
                 TextField
                 {
                     id: addressField
-                    maximumLength: 30
-                    width: Math.floor(parent.width * 0.6)    
+                    maximumLength: 253
+                    width: Math.floor(parent.width * 0.6)
                     validator: RegExpValidator
                     {
                         regExp: /[a-zA-Z0-9\.\-\_]*/
@@ -574,14 +641,14 @@ Cura.MachineAction
                 Label
                 {
                     text: catalog.i18nc("@label","Port Number")
-                    width: Math.floor(parent.width * 0.4)    
+                    width: Math.floor(parent.width * 0.4)
                 }
 
                 TextField
                 {
                     id: portField
                     maximumLength: 5
-                    width: Math.floor(parent.width * 0.6)    
+                    width: Math.floor(parent.width * 0.6)
                     validator: RegExpValidator
                     {
                         regExp: /[0-9]*/
@@ -590,14 +657,14 @@ Cura.MachineAction
                 Label
                 {
                     text: catalog.i18nc("@label","Path")
-                    width: Math.floor(parent.width * 0.4)    
+                    width: Math.floor(parent.width * 0.4)
                 }
 
                 TextField
                 {
                     id: pathField
                     maximumLength: 30
-                    width: Math.floor(parent.width * 0.6)    
+                    width: Math.floor(parent.width * 0.6)
                     validator: RegExpValidator
                     {
                         regExp: /[a-zA-Z0-9\.\-\_\/]*/
@@ -680,7 +747,7 @@ Cura.MachineAction
                 Label
                 {
                     text: catalog.i18nc("@label","Use HTTPS")
-                    width: Math.floor(parent.width * 0.4)    
+                    width: Math.floor(parent.width * 0.4)
                 }
 
                 CheckBox
@@ -691,27 +758,27 @@ Cura.MachineAction
                 Label
                 {
                     text: catalog.i18nc("@label","HTTP user name")
-                    width: Math.floor(parent.width * 0.4)    
+                    width: Math.floor(parent.width * 0.4)
                 }
 
                 TextField
                 {
                     id: userNameField
                     maximumLength: 64
-                    width: Math.floor(parent.width * 0.6)    
+                    width: Math.floor(parent.width * 0.6)
                 }
 
                 Label
                 {
                     text: catalog.i18nc("@label","HTTP password")
-                    width: Math.floor(parent.width * 0.4)    
+                    width: Math.floor(parent.width * 0.4)
                 }
 
                 TextField
                 {
                     id: passwordField
                     maximumLength: 64
-                    width: Math.floor(parent.width * 0.6)    
+                    width: Math.floor(parent.width * 0.6)
                     echoMode: TextInput.PasswordEchoOnEdit
                 }
 
@@ -740,7 +807,7 @@ Cura.MachineAction
             Button {
                 text: catalog.i18nc("@action:button", "Ok")
                 onClicked:
-                {					
+                {
                     manualPrinterDialog.accept()
                     manualPrinterDialog.hide()
                 }

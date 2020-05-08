@@ -1,4 +1,4 @@
-# Copyright (c) 2019 Aldo Hoeben / fieldOfView & Shane Bumpurs
+# Copyright (c) 2020 Aldo Hoeben / fieldOfView & Shane Bumpurs
 # RepetierIntegration is released under the terms of the AGPLv3 or higher.
 import os, json
 
@@ -11,6 +11,7 @@ from UM.Application import Application
 from UM.Logger import Logger
 
 from PyQt5.QtQml import qmlRegisterType
+
 def getMetaData():
     return {}
 

@@ -1,3 +1,6 @@
+// Copyright (c) 2020 Aldo Hoeben / fieldOfView & Shane Bumpurs
+// OctoPrintPlugin is released under the terms of the AGPLv3 or higher.
+
 import UM 1.2 as UM
 import Cura 1.0 as Cura
 
@@ -10,7 +13,7 @@ Item
 {
     id: base
 
-    property bool printerConnected: Cura.MachineManager.printerOutputDevices.length != 0    
+    property bool printerConnected: Cura.MachineManager.printerOutputDevices.length != 0
     property bool repetierConnected: printerConnected && Cura.MachineManager.printerOutputDevices[0].hasOwnProperty("repetierVersion")
 
     Button
@@ -19,7 +22,16 @@ Item
         height: UM.Theme.getSize("save_button_save_to_button").height
         tooltip: catalog.i18nc("@info:tooltip", "Open the Repetier web interface")
         text: catalog.i18nc("@action:button", "Open Repetier...")
-        style: UM.Theme.styles.sidebar_action_button
+        style:
+        {
+            if(UM.Theme.styles.hasOwnProperty("print_setup_action_button")) {
+                return UM.Theme.styles.print_setup_action_button
+            }
+            else
+            {
+                return UM.Theme.styles.sidebar_action_button
+            }
+        }
         onClicked: manager.openWebPage(Cura.MachineManager.printerOutputDevices[0].baseURL)
         visible: repetierConnected
     }
