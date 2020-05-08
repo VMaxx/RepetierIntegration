@@ -4,6 +4,7 @@
 Cura plugin which enables printing directly to Repetier and monitoring the progress
 The name has changed to RepetierIntegration in the plugin folder.
 This plugin is basically a copy of the Octoprint plugin with the necessary changes to work with repetier server.
+
 Updated to 4.6.1 but will still work with 4.6 version change is due to the many changes made.
 
 Installation
@@ -31,9 +32,12 @@ How to use
 - If you do not want to print immediately but have your print job stored uncheck "Automatically start print job after uploading"
 - From this point on, the print monitor should be functional and you should be able to switch to "Print to Repetier" on the bottom of the sidebar.
   
-  Config example:
+Config example:
   ![alt text](https://user-images.githubusercontent.com/12956626/59142707-9d0d5e00-8987-11e9-94f7-53bc2707e3d1.jpg "Config") 
   
-  Updated with the fixes I found in Octoprint Plugin
-  Cura has a bug so that if you have ever renamed your printer this plugin won't work.  You'll have to create a new printer from scratch.
+What's new:
+
+Updated with the fixes I found in Octoprint Plugin
+
+Cura has a bug so that if you have ever renamed your printer this plugin won't work.  You'll have to create a new printer from scratch.
   
