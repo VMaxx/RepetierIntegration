@@ -36,6 +36,8 @@ Config example:
   ![alt text](https://user-images.githubusercontent.com/12956626/59142707-9d0d5e00-8987-11e9-94f7-53bc2707e3d1.jpg "Config") 
   
 What's new:
+
 Updated with the fixes I found in Octoprint Plugin
+
 Cura has a bug so that if you have ever renamed your printer this plugin won't work.  You'll have to create a new printer from scratch.
   
