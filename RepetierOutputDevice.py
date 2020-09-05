@@ -597,8 +597,8 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                                         hotend_temperatures = json_data[self._repetier_id]["extruder"]
                                         #Logger.log("d", "target end temp %s", hotend_temperatures[index]["tempSet"])
                                         #Logger.log("d", "target end temp %s", hotend_temperatures[index]["tempRead"])
-                                        extruder.updateTargetHotendTemperature(hotend_temperatures[index]["tempSet"])
-                                        extruder.updateHotendTemperature(hotend_temperatures[index]["tempRead"])                                    
+                                        extruder.updateTargetHotendTemperature(round(hotend_temperatures[index]["tempSet"],2))
+                                        extruder.updateHotendTemperature(round(hotend_temperatures[index]["tempRead"],2))
                                     else:
                                         extruder.updateTargetHotendTemperature(0)
                                         extruder.updateHotendTemperature(0)
@@ -606,18 +606,18 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                             if "heatedBed" in json_data[self._repetier_id]:
                                 bed_temperatures = json_data[self._repetier_id]["heatedBed"]
                                 actual_temperature = bed_temperatures["tempRead"] if bed_temperatures["tempRead"] is not None else -1
-                                printer.updateBedTemperature(actual_temperature)
+                                printer.updateBedTemperature(round(actual_temperature,2))
                                 target_temperature = bed_temperatures["tempSet"] if bed_temperatures["tempSet"] is not None else -1                                    
-                                printer.updateTargetBedTemperature(target_temperature)
+                                printer.updateTargetBedTemperature(round(target_temperature,2))
                                 #Logger.log("d", "target bed temp %s", target_temperature)
                                 #Logger.log("d", "actual bed temp %s", actual_temperature)
                             else:
                                 if "heatedBeds" in json_data[self._repetier_id]:
                                     bed_temperatures = json_data[self._repetier_id]["heatedBeds"][0]
                                     actual_temperature = bed_temperatures["tempRead"] if bed_temperatures["tempRead"] is not None else -1
-                                    printer.updateBedTemperature(actual_temperature)
+                                    printer.updateBedTemperature(round(actual_temperature,2))
                                     target_temperature = bed_temperatures["tempSet"] if bed_temperatures["tempSet"] is not None else -1                                    
-                                    printer.updateTargetBedTemperature(target_temperature)
+                                    printer.updateTargetBedTemperature(round(target_temperature,2))
                                     #Logger.log("d", "target bed temp %s", target_temperature)
                                     #Logger.log("d", "actual bed temp %s", actual_temperature)
                                 else:
