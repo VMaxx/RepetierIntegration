@@ -1,6 +1,7 @@
 # RepetierIntegration
 # Version 4.7
 Shane Bumpurs
+
 Cura plugin which enables printing directly to Repetier and monitoring the progress
 The name has changed to RepetierIntegration in the plugin folder.
 This plugin is basically a copy of the Octoprint plugin with the necessary changes to work with repetier server.
