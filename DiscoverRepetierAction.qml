@@ -3,6 +3,7 @@ import Cura 1.1 as Cura
 
 import QtQuick 2.2
 import QtQuick.Controls 1.1
+import QtQuick.Controls 2.15 as QQC2
 import QtQuick.Layouts 1.1
 import QtQuick.Window 2.1
 import QtQuick.Dialogs 1.1
@@ -697,7 +698,7 @@ Cura.MachineAction
                     width: Math.floor(parent.width * 0.4)    
                 }
 
-                ComboBox
+                QQC2.ComboBox
                 {
                     model: ListModel
                     {
