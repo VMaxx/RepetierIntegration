@@ -252,7 +252,7 @@ class DiscoverRepetierAction(MachineAction):
     @pyqtSlot(str)
     def getPrinterList(self, base_url):        
         self._instance_responded = False
-        url = QUrl("http://" + base_url + "/printer/info")
+        url = QUrl( base_url + "printer/info")
         Logger.log("d", "getPrinterList:" + url.toString())
         settings_request = QNetworkRequest(url)        
         settings_request.setRawHeader("User-Agent".encode(), self._user_agent)
