@@ -676,7 +676,7 @@ Cura.MachineAction
                 text: catalog.i18nc("@action:button","Get Printers")
                 onClicked:
                     {
-                        manager.getPrinterList(manualPrinterDialog.addressText.trim()+":"+manualPrinterDialog.portText.trim())
+                        manager.getPrinterList("http://" + manualPrinterDialog.addressText.trim()+":"+manualPrinterDialog.portText.trim()+"/")
                         if (manager.getPrinters.length>0)
                             {
                                 comboPrinters.clear()
