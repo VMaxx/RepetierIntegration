@@ -4,13 +4,12 @@
 from UM.OutputDevice.OutputDevicePlugin import OutputDevicePlugin
 from .RepetierOutputDevice import RepetierOutputDevice
 
-from .zeroconf import Zeroconf, ServiceBrowser, ServiceStateChange, ServiceInfo
 from UM.Signal import Signal, signalemitter
 from UM.Application import Application
 from UM.Logger import Logger
 from UM.Util import parseBool
 
-from PyQt5.QtCore import QTimer
+from PyQt6.QtCore import QTimer
 import time
 import json
 import re
@@ -176,53 +175,4 @@ class RepetierOutputDevicePlugin(OutputDevicePlugin):
         else:
             self.getOutputDeviceManager().removeOutputDevice(key)
 
-    ##  Handler for zeroConf detection
-    def _onServiceChanged(self, zeroconf: Zeroconf, service_type: str, name: str, state_change: ServiceStateChange):
-        if state_change == ServiceStateChange.Added:
-            key = name
-            result = self._name_regex.match(name)
-            if result:
-                if result.group(1) == "on ":
-                    name = result.group(2)
-                else:
-                    name = result.group(1) + result.group(2)
 
-            Logger.log("d", "Bonjour service added: %s" % name)
-
-            # First try getting info from zeroconf cache
-            info = ServiceInfo(service_type, key)
-            for record in zeroconf.cache.entries_with_name(key.lower()):
-                info.update_record(zeroconf, time.time(), record)
-
-            address = ""
-            for record in zeroconf.cache.entries_with_name(info.server):
-                info.update_record(zeroconf, time.time(), record)
-                try:
-                    ip = ipaddress.IPv4Address(record.address) # IPv4
-                except ipaddress.AddressValueError:
-                    ip = ipaddress.IPv6Address(record.address) # IPv6
-                except:
-                    continue
-
-                if not ip.is_link_local: # don't accept 169.254.x.x address
-                    address = str(ip) if ip.version == 4 else "[%s]" % str(ip)
-                    break
-
-            # Request more data if info is not complete
-            if not address or not info.port:
-                Logger.log("d", "Trying to get address of %s", name)
-                requested_info = zeroconf.get_service_info(service_type, key)
-
-                if not requested_info:
-                    Logger.log("w", "Could not get information about %s" % name)
-                    return
-
-                info = requested_info
-
-            if address and info.port:
-                self.addInstanceSignal.emit(name, address, info.port, info.properties)
-            else:
-                Logger.log("d", "Discovered instance named %s but received no address", name)
-
-        elif state_change == ServiceStateChange.Removed:
-            self.removeInstanceSignal.emit(str(name))
