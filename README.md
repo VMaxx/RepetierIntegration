@@ -1,16 +1,16 @@
 # RepetierIntegration
-# Version 4.10
+# Version 5.0
 Shane Bumpurs
 
 Cura plugin which enables printing directly to Repetier and monitoring the progress
 The name has changed to RepetierIntegration in the plugin folder.
 This plugin is basically a copy of the Octoprint plugin with the necessary changes to work with repetier server.
-Updated to 4.10 but will still work with 4.6 version change is due to the many changes made.
+Updated to 5.0, this version will not work with any lower versions.
 
 Installation
 ----
 * Manually:
-  - Make sure your Cura version is 4.0+
+  - Make sure your Cura version is 5.0
   - Download or clone the repository into [Cura installation folder]/plugins/RepetierIntegration
     or in the plugins folder inside the configuration folder. The configuration folder can be
     found via Help -> Show Configuration Folder inside Cura.
@@ -35,6 +35,5 @@ How to use
   Config example:
   ![alt text](https://user-images.githubusercontent.com/12956626/59142707-9d0d5e00-8987-11e9-94f7-53bc2707e3d1.jpg "Config") 
   
-  Rounded temperatures to 2 decimal places per Pierre Dennert - "..2 should be enough, right?"
-   Cura has a bug so that if you have ever renamed your printer this plugin won't work.  You'll have to create a new printer from scratch.
+     Cura has a bug so that if you have ever renamed your printer this plugin won't work.  You'll have to create a new printer from scratch.
   
