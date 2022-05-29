@@ -18,10 +18,16 @@ from cura.PrinterOutput.Models.PrintJobOutputModel import PrintJobOutputModel
 
 from cura.PrinterOutput.GenericOutputController import GenericOutputController
 
-from PyQt5.QtNetwork import QHttpMultiPart, QHttpPart, QNetworkRequest, QNetworkAccessManager
-from PyQt5.QtNetwork import QNetworkReply, QSslConfiguration, QSslSocket
-from PyQt5.QtCore import QUrl, QTimer, pyqtSignal, pyqtProperty, pyqtSlot, QCoreApplication
-from PyQt5.QtGui import QImage, QDesktopServices
+from PyQt6.QtNetwork import QHttpMultiPart, QHttpPart, QNetworkRequest, QNetworkAccessManager
+from PyQt6.QtNetwork import QNetworkReply, QSslConfiguration, QSslSocket
+from PyQt6.QtCore import QUrl, QTimer, pyqtSignal, pyqtProperty, pyqtSlot, QCoreApplication
+from PyQt6.QtGui import QImage, QDesktopServices
+
+QNetworkAccessManagerOperations = QNetworkAccessManager.Operation
+QNetworkRequestKnownHeaders = QNetworkRequest.KnownHeaders
+QNetworkRequestAttributes = QNetworkRequest.Attribute
+QNetworkReplyNetworkErrors = QNetworkReply.NetworkError
+QSslSocketPeerVerifyModes = QSslSocket.PeerVerifyMode
 
 import json
 import os.path
@@ -73,6 +79,7 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         self._gcode_stream = StringIO()
 
         self._auto_print = True
+        self._store_print = False
         self._forced_queue = False
 
         # We start with a single extruder, but update this when we get data from Repetier
@@ -339,6 +346,8 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
             self._progress_message = None
 
         self._auto_print = parseBool(global_container_stack.getMetaDataEntry("repetier_auto_print", True))
+        self._store_print = parseBool(global_container_stack.getMetaDataEntry("repetier_store_print", False))
+        self._store_group = global_container_stack.getMetaDataEntry("repetier_store_group","#")
         self._forced_queue = False
 
         if self.activePrinter.state not in ["idle", ""]:
@@ -430,7 +439,7 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
 
         job_name = CuraApplication.getInstance().getPrintInformation().jobName.strip()
         Logger.log("d", "Print job: [%s]", job_name)
-        if job_name is "":
+        if job_name == "":
             job_name = "untitled_print"
         file_name = "%s.gcode" % job_name
 
@@ -439,18 +448,21 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
 
             ##  Create parts (to be placed inside multipart)
         post_part = QHttpPart()
-        post_part.setHeader(QNetworkRequest.ContentDispositionHeader, "form-data; name=\"a\"")
+#        post_part.setHeader(QNetworkRequest.ContentDispositionHeader, "form-data; name=\"a\"")
+        post_part.setHeader(QNetworkRequestKnownHeaders.ContentDispositionHeader, "form-data; name=\"a\"")
         post_part.setBody(b"upload")
         post_parts.append(post_part)
 
         if self._auto_print and not self._forced_queue:
             post_part = QHttpPart()
-            post_part.setHeader(QNetworkRequest.ContentDispositionHeader, "form-data; name=\"%s\"" % file_name)
+#            post_part.setHeader(QNetworkRequest.ContentDispositionHeader, "form-data; name=\"%s\"" % file_name)
+            post_part.setHeader(QNetworkRequestKnownHeaders.ContentDispositionHeader, "form-data; name=\"%s\"" % file_name)
             post_part.setBody(b"upload")
             post_parts.append(post_part)
             
         post_part = QHttpPart()
-        post_part.setHeader(QNetworkRequest.ContentDispositionHeader, "form-data; name=\"file\"; filename=\"%s\"" % file_name)
+#        post_part.setHeader(QNetworkRequest.ContentDispositionHeader, "form-data; name=\"file\"; filename=\"%s\"" % file_name)
+        post_part.setHeader(QNetworkRequestKnownHeaders.ContentDispositionHeader, "form-data; name=\"file\"; filename=\"%s\"" % file_name)
         post_part.setBody(self._gcode_stream.getvalue().encode())
         post_parts.append(post_part)
 
@@ -461,8 +473,16 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         try:
             #  Post request + data
             #post_request = self._createApiRequest("files/" + destination)
-            post_request = self._createEmptyRequest("upload&name=%s" % file_name)
-            self._post_reply = self.postFormWithParts("upload&name=%s" % file_name, post_parts, on_finished=self._onUploadFinished, on_progress=self._onUploadProgress)
+            #post_request = self._createEmptyRequest("upload&name=%s" % file_name)
+            Logger.log("d", "_store_print: %s" % self._store_print)
+            Logger.log("d", "_store_group: %s" % self._store_group)
+            if self._store_print:
+                Logger.log("d", "upload&name=%s&group=%s" % (file_name,self._store_group))
+                self._post_reply = self.postFormWithParts("upload&name=%s&group=%s" % (file_name,self._store_group), post_parts, on_finished=self._onUploadFinished, on_progress=self._onUploadProgress)
+            else:
+                Logger.log("d", "upload&name=%s" % file_name)
+                self._post_reply = self.postFormWithParts("upload&name=%s" % file_name, post_parts, on_finished=self._onUploadFinished, on_progress=self._onUploadProgress)
+
             #self._post_reply = self._manager.post(post_request, self._post_multi_part)
             #self._post_reply.uploadProgress.connect(self._onUploadProgress)
 
@@ -532,30 +552,35 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         global_container_stack = CuraApplication.getInstance().getGlobalContainerStack()
         if not global_container_stack:
             return
-        if reply.error() == QNetworkReply.TimeoutError:
+#        if reply.error() == QNetworkReply.TimeoutError:
+        if reply.error() == QNetworkReplyNetworkErrors.TimeoutError:
             Logger.log("w", "Received a timeout on a request to the instance")
             self._connection_state_before_timeout = self._connection_state
             self.setConnectionState(cast(ConnectionState, UnifiedConnectionState.Error))
             self.setConnectionText(i18n_catalog.i18nc("@info:status", "Repetier Connection to printer failed"))
             return
 
-        if self._connection_state_before_timeout and reply.error() == QNetworkReply.NoError:
+#        if self._connection_state_before_timeout and reply.error() == QNetworkReply.NoError:
+        if self._connection_state_before_timeout and reply.error() == QNetworkReplyNetworkErrors.NoError:
             #  There was a timeout, but we got a correct answer again.
             if self._last_response_time:
                 Logger.log("d", "We got a response from the instance after %s of silence", time() - self._last_response_time)
             self.setConnectionState(self._connection_state_before_timeout)
             self._connection_state_before_timeout = None
 
-        if reply.error() == QNetworkReply.NoError:
+#        if reply.error() == QNetworkReply.NoError:
+        if reply.error() == QNetworkReplyNetworkErrors.NoError:
             self._last_response_time = time()
 
-        http_status_code = reply.attribute(QNetworkRequest.HttpStatusCodeAttribute)
+#        http_status_code = reply.attribute(QNetworkRequest.HttpStatusCodeAttribute)
+        http_status_code = reply.attribute(QNetworkRequestAttributes.HttpStatusCodeAttribute)
         if not http_status_code:
             self.setConnectionText(i18n_catalog.i18nc("@info:status", "Repetier Connection recevied no data"))
             return
 
         error_handled = False
-        if reply.operation() == QNetworkAccessManager.GetOperation:
+#        if reply.operation() == QNetworkAccessManager.GetOperation:
+        if reply.operation() == QNetworkAccessManagerOperations.GetOperation:
             Logger.log("d", "reply.url() = %s", reply.url().toString())
             if self._api_prefix + "?a=stateList" in reply.url().toString():  # Status update from /printer.
                 if not self._printers:
@@ -663,7 +688,6 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                     except json.decoder.JSONDecodeError:
                         Logger.log("w", "Received invalid JSON from Repetier instance.")
                         json_data = {}
-
                     try:
                         if self._printerindex(json_data,self._repetier_id)>-1:
                             Logger.log("d", "listPrinter JSON: %s",json_data[self._printerindex(json_data,self._repetier_id)])
@@ -705,10 +729,12 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                                     print_job.updateTimeTotal(0)
                                 print_job.updateName(json_data[self._printerindex(json_data,self._repetier_id)]["job"])
                     except:
-                        printer.activePrintJob.updateState("offline")
+                        if printer.activePrintJob is not None:
+                             printer.activePrintJob.updateState("offline")
                         self.setConnectionText(i18n_catalog.i18nc("@info:status", "Repetier on {0} configuration is invalid").format(self._key))
                 else:
-                    printer.activePrintJob.updateState("offline")
+                    if printer.activePrintJob is not None:
+                        printer.activePrintJob.updateState("offline")
                     self.setConnectionText(i18n_catalog.i18nc("@info:status", "Repetier on {0} bad response").format(self._repetier_id))
             elif self._api_prefix + "?a=getPrinterConfig" in reply.url().toString():  # Repetier settings dump from /settings:                
                 if http_status_code == 200:
@@ -876,7 +902,8 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         if self._progress_message:
             self._progress_message.hide()
 
-        http_status_code = reply.attribute(QNetworkRequest.HttpStatusCodeAttribute)
+#        http_status_code = reply.attribute(QNetworkRequest.HttpStatusCodeAttribute)
+        http_status_code = reply.attribute(QNetworkRequestAttributes.HttpStatusCodeAttribute)
         Logger.log("d", "_onUploadFinished http_status_code=%d", http_status_code)		
         error_string = ""
         if http_status_code == 401:
@@ -899,8 +926,10 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
             Logger.log("e", error_string)
             return
 
-        location_url = reply.header(QNetworkRequest.LocationHeader)
-        Logger.log("d", "Resource created on Repetier instance: %s", location_url.toString())
+        #location_url = reply.header(QNetworkRequest.LocationHeader)
+        location_url = reply.header(QNetworkRequestKnownHeaders.LocationHeader)
+        if location_url:
+            Logger.log("d", "Resource created on Repetier instance: %s", location_url.toString())
 
         if self._forced_queue or not self._auto_print:
             if location_url:
@@ -913,7 +942,7 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                 "open_browser", i18n_catalog.i18nc("@action:button", "Repetier..."), "globe",
                 i18n_catalog.i18nc("@info:tooltip", "Open the Repetier web interface")
             )
-            message.actionTriggered.connect(self._openRepetier)
+            message.actionTriggered.connect(self._openRepetierPrint)
             message.show()
         elif self._auto_print:
             end_point = location_url.toString().split(self._api_prefix, 1)[1]
@@ -974,17 +1003,20 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                   request = QNetworkRequest(QUrl(self._job_url + "?a=" + target))
         else:	
              request = QNetworkRequest(QUrl(self._api_url + "?a=" + target))
-        request.setAttribute(QNetworkRequest.FollowRedirectsAttribute, True)
+# Removed per QT6			 
+#        request.setAttribute(QNetworkRequest.FollowRedirectsAttribute, True)        
 
         request.setRawHeader(b"X-Api-Key", self._api_key)
         request.setRawHeader(b"User-Agent", self._user_agent.encode())
 
         if content_type is not None:
-            request.setHeader(QNetworkRequest.ContentTypeHeader, content_type)
+            request.setHeader(QNetworkRequestKnownHeaders.ContentTypeHeader, content_type)
+#            request.setHeader(QNetworkRequest.ContentTypeHeader, content_type)
 
         # ignore SSL errors (eg for self-signed certificates)
         ssl_configuration = QSslConfiguration.defaultConfiguration()
-        ssl_configuration.setPeerVerifyMode(QSslSocket.VerifyNone)
+#        ssl_configuration.setPeerVerifyMode(QSslSocket.VerifyNone)
+        ssl_configuration.setPeerVerifyMode(QSslSocketPeerVerifyModes.VerifyNone)
         request.setSslConfiguration(ssl_configuration)
 
         if self._basic_auth_data:
@@ -998,9 +1030,11 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
 
         if not content_header.startswith("form-data;"):
             content_header = "form-data; " + content_header
-        part.setHeader(QNetworkRequest.ContentDispositionHeader, content_header)
+#        part.setHeader(QNetworkRequest.ContentDispositionHeader, content_header)
+        part.setHeader(QNetworkRequestKnownHeaders.ContentDispositionHeader, content_header)
         if content_type is not None:
-            part.setHeader(QNetworkRequest.ContentTypeHeader, content_type)
+#            part.setHeader(QNetworkRequest.ContentTypeHeader, content_type)
+            part.setHeader(QNetworkRequestKnownHeaders.ContentTypeHeader, content_type)
 
         part.setBody(data)
         return part

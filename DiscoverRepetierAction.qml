@@ -1,12 +1,8 @@
-import UM 1.2 as UM
-import Cura 1.1 as Cura
+import QtQuick 2.1
+import QtQuick.Controls 2.0
 
-import QtQuick 2.2
-import QtQuick.Controls 1.1
-import QtQuick.Controls 2.15 as QQC2
-import QtQuick.Layouts 1.1
-import QtQuick.Window 2.1
-import QtQuick.Dialogs 1.1
+import UM 1.5 as UM
+import Cura 1.0 as Cura
 
 Cura.MachineAction
 {
@@ -59,23 +55,21 @@ Cura.MachineAction
         spacing: UM.Theme.getSize("default_margin").height
         width: parent.width
 
-        SystemPalette { id: palette }
-        UM.I18nCatalog { id: catalog; name:"cura" }
+        UM.I18nCatalog { id: catalog; name:"repetier" }
 
         Item
         {
             width: parent.width
             height: pageTitle.height
 
-            Label
+            UM.Label
             {
                 id: pageTitle
                 text: catalog.i18nc("@title", "Connect to Repetier")
-                wrapMode: Text.WordWrap
-                font.pointSize: 18
+                font: UM.Theme.getFont("large_bold")
             }
 
-            Label
+            UM.Label
             {
                 id: pluginVersion
                 anchors.bottom: pageTitle.bottom
@@ -85,7 +79,7 @@ Cura.MachineAction
                 font.pointSize: 8
             }
         }
-        Label
+        UM.Label
         {
             id: pageDescription
             width: parent.width
@@ -97,7 +91,7 @@ Cura.MachineAction
         {
             spacing: UM.Theme.getSize("default_lining").width
 
-            Button
+            Cura.SecondaryButton
             {
                 id: addButton
                 text: catalog.i18nc("@action:button", "Add");
@@ -107,23 +101,39 @@ Cura.MachineAction
                 }
             }
 
-            Button
+            Cura.SecondaryButton
             {
                 id: editButton
                 text: catalog.i18nc("@action:button", "Edit")
                 enabled: base.selectedInstance != null && base.selectedInstance.getProperty("manual") == "true"
                 onClicked:
                 {
-                    manualPrinterDialog.showDialog(
-                        base.selectedInstance.name, base.selectedInstance.ipAddress,
-                        base.selectedInstance.port, base.selectedInstance.path,
-                        base.selectedInstance.getProperty("useHttps") == "true",
-                        base.selectedInstance.getProperty("userName"), base.selectedInstance.getProperty("password"),Cura.ContainerManager.getContainerMetaDataEntry(base.selectedInstance.name, "repetier_id")
-                    );
+					if (Cura.ContainerManager.getContainerMetaDataEntry(base.selectedInstance.name, "repetier_id") != null)
+						{
+						manualPrinterDialog.showDialog(
+							base.selectedInstance.name, base.selectedInstance.ipAddress,
+							base.selectedInstance.port, base.selectedInstance.path,
+							base.selectedInstance.getProperty("useHttps") == "true",						
+							base.selectedInstance.getProperty("userName"), 
+							base.selectedInstance.getProperty("password"), 
+							Cura.ContainerManager.getContainerMetaDataEntry(base.selectedInstance.name, "repetier_id")							
+						);
+						}
+					else
+						{
+						manualPrinterDialog.showDialog(
+							base.selectedInstance.name, base.selectedInstance.ipAddress,
+							base.selectedInstance.port, base.selectedInstance.path,
+							base.selectedInstance.getProperty("useHttps") == "true",						
+							base.selectedInstance.getProperty("userName"), 
+							base.selectedInstance.getProperty("password"), 
+							""
+						);
+						}
                 }
             }
 
-            Button
+            Cura.SecondaryButton
             {
                 id: removeButton
                 text: catalog.i18nc("@action:button", "Remove")
@@ -131,7 +141,7 @@ Cura.MachineAction
                 onClicked: manager.removeManualInstance(base.selectedInstance.name)
             }
 
-            Button
+            Cura.SecondaryButton
             {
                 id: rediscoverButton
                 text: catalog.i18nc("@action:button", "Refresh")
@@ -144,94 +154,91 @@ Cura.MachineAction
             width: parent.width
             spacing: UM.Theme.getSize("default_margin").width
 
-            Item
+            Rectangle
             {
                 width: Math.floor(parent.width * 0.4)
-                height: base.height - parent.y
+                height: base.height - (parent.y + UM.Theme.getSize("default_margin").height)
 
-                ScrollView
+                color: UM.Theme.getColor("main_background")
+                border.width: UM.Theme.getSize("default_lining").width
+                border.color: UM.Theme.getColor("thick_lining")
+
+                ListView
                 {
-                    id: objectListContainer
-                    frameVisible: true
-                    width: parent.width
-                    anchors.top: parent.top
-                    anchors.bottom: objectListFooter.top
-                    anchors.bottomMargin: UM.Theme.getSize("default_margin").height
+                    id: listview
 
-                    Rectangle
+                    clip: true
+                    ScrollBar.vertical: UM.ScrollBar {}
+
+                    anchors.fill: parent
+                    anchors.margins: UM.Theme.getSize("default_lining").width
+
+                    model: manager.discoveredInstances
+                    onModelChanged:
                     {
-                        parent: viewport
-                        anchors.fill: parent
-                        color: palette.light
+                        var selectedId = manager.instanceId;
+                        for(var i = 0; i < model.length; i++) {
+                            if(model[i].getId() == selectedId)
+                            {
+                                currentIndex = i;
+                                return
+                            }
+                        }
+                        currentIndex = -1;
                     }
 
-                    ListView
+                    currentIndex: activeIndex
+                    onCurrentIndexChanged:
                     {
-                        id: listview
-                        model: manager.discoveredInstances
-                        onModelChanged:
-                        {
-                            var selectedId = manager.getInstanceId();
-                            for(var i = 0; i < model.length; i++) {
-                                if(model[i].getId() == selectedId)
-                                {
-                                    currentIndex = i;
-                                    return
-                                }
-                            }
-                            currentIndex = -1;
-                        }
+                        base.selectedInstance = listview.model[currentIndex];
+                        apiCheckDelay.throttledCheck();
+						comboGroups.clear();
+                    }
+
+                    Component.onCompleted: manager.startDiscovery()
+
+                    delegate: Rectangle
+                    {
+                        height: childrenRect.height
+                        color: ListView.isCurrentItem ? UM.Theme.getColor("text_selection") : UM.Theme.getColor("main_background")
                         width: parent.width
-                        currentIndex: activeIndex
-                        onCurrentIndexChanged:
+                        UM.Label
                         {
-                            base.selectedInstance = listview.model[currentIndex];
-                            apiCheckDelay.throttledCheck();
+                            anchors.left: parent.left
+                            anchors.leftMargin: UM.Theme.getSize("default_margin").width
+                            anchors.right: parent.right
+                            text: listview.model[index].name
+                            elide: Text.ElideRight
+                            font.italic: listview.model[index].key == manager.instanceId
+                            wrapMode: Text.NoWrap
                         }
-                        Component.onCompleted: manager.startDiscovery()
-                        delegate: Rectangle
-                        {
-                            height: childrenRect.height
-                            color: ListView.isCurrentItem ? palette.highlight : index % 2 ? palette.base : palette.alternateBase
-                            width: parent.width
-                            Label
-                            {
-                                anchors.left: parent.left
-                                anchors.leftMargin: UM.Theme.getSize("default_margin").width
-                                anchors.right: parent.right
-                                text: listview.model[index].name
-                                color: parent.ListView.isCurrentItem ? palette.highlightedText : palette.text
-                                elide: Text.ElideRight
-                                font.italic: listview.model[index].key == manager.instanceId
-                            }
 
-                            MouseArea
+                        MouseArea
+                        {
+                            anchors.fill: parent;
+                            onClicked:
                             {
-                                anchors.fill: parent;
-                                onClicked:
+                                if(!parent.ListView.isCurrentItem)
                                 {
-                                    if(!parent.ListView.isCurrentItem)
-                                    {
-                                        parent.ListView.view.currentIndex = index;
-                                    }
+                                    parent.ListView.view.currentIndex = index;
                                 }
                             }
                         }
-                    }
+                    }                    
                 }
             }
 
             Column
             {
-                width: Math.floor(parent.width * 0.6)    
+                width: Math.floor(parent.width * 0.6)
                 spacing: UM.Theme.getSize("default_margin").height
-                Label
+                UM.Label
                 {
                     visible: base.selectedInstance != null
                     width: parent.width
                     wrapMode: Text.WordWrap
                     text: base.selectedInstance ? base.selectedInstance.name : ""
-                    font.pointSize: 16
+                    font: UM.Theme.getFont("large_bold")
                     elide: Text.ElideRight
                 }
                 Grid
@@ -241,49 +248,49 @@ Cura.MachineAction
                     columns: 2
                     rowSpacing: UM.Theme.getSize("default_lining").height
                     verticalItemAlignment: Grid.AlignVCenter
-                    Label
+                    UM.Label
                     {
                         width: Math.floor(parent.width * 0.2)
                         wrapMode: Text.WordWrap
                         text: catalog.i18nc("@label", "Version")
                     }
-                    Label
+                    UM.Label
                     {
                         width: Math.floor(parent.width * 0.75)
                         wrapMode: Text.WordWrap
                         text: base.selectedInstance ? base.selectedInstance.repetierVersion : ""
                     }
-                    Label
+                    UM.Label
                     {
-                        width: Math.floor(parent.width * 0.2)    
+                        width: Math.floor(parent.width * 0.2)
                         wrapMode: Text.WordWrap
                         text: catalog.i18nc("@label", "Address")
                     }
-                    Label
+                    UM.Label
                     {
-                        width: Math.floor(parent.width * 0.7)    
+                        width: Math.floor(parent.width * 0.7)
                         wrapMode: Text.WordWrap
                         text: base.selectedInstance ? "%1:%2".arg(base.selectedInstance.ipAddress).arg(String(base.selectedInstance.port)) : ""
                     }
-                    Label
+                    UM.Label
                     {
-                        width: Math.floor(parent.width * 0.2)    
+                        width: Math.floor(parent.width * 0.2)
                         wrapMode: Text.WordWrap
                         text: catalog.i18nc("@label", "RepetierID")
                     }
-                    Label
+                    UM.Label
                     {
                         id: lblRepID
                         width: Math.floor(parent.width * 0.2)    
                         text: base.selectedInstance ? Cura.ContainerManager.getContainerMetaDataEntry(base.selectedInstance.name, "repetier_id") : ""
                     }                    
-                    Label
+                    UM.Label
                     {
                         width: Math.floor(parent.width * 0.2)    
                         wrapMode: Text.WordWrap
                         text: catalog.i18nc("@label", "API Key")
                     }
-                    TextField
+                    Cura.TextField
                     {
                         id: apiKey
                         width: Math.floor(parent.width * 0.8 - UM.Theme.getSize("default_margin").width)                            
@@ -291,19 +298,20 @@ Cura.MachineAction
                         onTextChanged:
                         {
                             apiCheckDelay.throttledCheck()
+							comboGroups.clear()
                         }
                     }
                     Connections
                     {
                         target: base
-                        onSelectedInstanceChanged:
+                        function onSelectedInstanceChanged()
                         {
                             if(base.selectedInstance != null)
-							{
-								lblRepID.text = Cura.ContainerManager.getContainerMetaDataEntry(base.selectedInstance.name, "repetier_id")
-								apiKey.text = Cura.ContainerManager.getContainerMetaDataEntry(base.selectedInstance.name, "repetier_api_key")
-								//apiKey.text = manager.getApiKey(base.selectedInstance.getId())
-							}
+                            {
+                                lblRepID.text = Cura.ContainerManager.getContainerMetaDataEntry(base.selectedInstance.name, "repetier_id")
+                                apiKey.text = Cura.ContainerManager.getContainerMetaDataEntry(base.selectedInstance.name, "repetier_api_key")
+                                //apiKey.text = manager.getApiKey(base.selectedInstance.getId())
+                            }
                         }
                     }
                     Timer
@@ -311,11 +319,9 @@ Cura.MachineAction
                         id: apiCheckDelay
                         interval: 500
 
-                        signal throttledCheck
-                        signal check
                         property bool checkOnTrigger: false
 
-                        onThrottledCheck:
+                        function throttledCheck()
                         {
                             if(running)
                             {
@@ -326,14 +332,14 @@ Cura.MachineAction
                                 check();
                             }
                         }
-                        onCheck:
-                        {  
+                        function check()
+                        {
                             if(base.selectedInstance != null)
                             if(base.selectedInstance.baseURL != null)
-                            {
-                                 manager.testApiKey(base.selectedInstance.getId(),base.selectedInstance.baseURL, apiKey.text, base.selectedInstance.getProperty("userName"), base.selectedInstance.getProperty("password"), lblRepID.text)
-                                 checkOnTrigger = false;
-                                 restart();
+                            {								
+                                manager.testApiKey(base.selectedInstance.getId(),base.selectedInstance.baseURL, apiKey.text, base.selectedInstance.getProperty("userName"), base.selectedInstance.getProperty("password"), lblRepID.text);
+                                checkOnTrigger = false;
+                                restart();
                             }
                         }
                         onTriggered:
@@ -343,10 +349,10 @@ Cura.MachineAction
                                 check();
                             }
                         }
-                    }
+                    }			
                 }
 
-                Label
+                UM.Label
                 {
                     visible: base.selectedInstance != null && text != ""
                     text:
@@ -358,6 +364,10 @@ Cura.MachineAction
                         }
                         else
                         {
+                            if(manager.instanceInError)
+                            {
+                                return catalog.i18nc("@label", "Repetier is not available.")
+                            }
                             if(manager.instanceResponded)
                             {
                                 if(manager.instanceApiKeyAccepted)
@@ -387,7 +397,7 @@ Cura.MachineAction
                     width: parent.width
                     spacing: UM.Theme.getSize("default_lining").height
 
-                    CheckBox
+                    UM.CheckBox
                     {
                         id: autoPrintCheckBox
                         text: catalog.i18nc("@label", "Automatically start print job after uploading")
@@ -398,7 +408,121 @@ Cura.MachineAction
                             manager.setContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_auto_print", String(checked))
                         }
                     }
-                    CheckBox
+                    UM.CheckBox
+                    {
+                        id: storeAndPrintCheckBox
+                        text: catalog.i18nc("@label", "Store print job and print")
+                        enabled: manager.instanceApiKeyAccepted
+                        checked: manager.instanceApiKeyAccepted && Cura.ContainerManager.getContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_store_print") != "false"
+                        onClicked:
+                        {
+                            manager.setContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_store_print", String(checked))
+                        }
+                    }
+                    Cura.ComboBox
+                    {
+						id: comboGroupsctl
+						property bool populatingModel: false
+                        textRole: "label"
+                        editable: false                        
+                        width: Math.floor(parent.width * 0.4)
+						
+                        model: ListModel
+                        {
+                            id: comboGroups
+							
+							Component.onCompleted: populateModel()
+							
+							function populateModel()
+							{
+								comboGroupsctl.populatingModel = true;									
+								var add = true											
+								for (var i = 0; i < manager.getGroups.length; i++)
+									{																								
+									for (var m = 0; m < comboGroups.count; m++)											
+										{																										
+										if(comboGroups.get(m).key==manager.getGroups[i])
+											{														
+											add=false;
+											}
+										}
+									if(add==true)
+										{
+										if(manager.getGroups[i] != "")
+											{
+											comboGroups.append({ label: catalog.i18nc("@action:ComboBox option", manager.getGroups[i]), key: manager.getGroups[i] });																											
+											}
+										}													
+									}
+								var current_index = -1;
+								if (Cura.ContainerManager.getContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_store_group") != undefined)
+									{	
+										if (manager.getGroups.length > 0)
+											for(var i = 0; i < manager.getGroups.length; i++)
+											{	if(comboGroups.get(i) != undefined)										
+												if(comboGroups.get(i).key == Cura.ContainerManager.getContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_store_group"))
+												{
+													current_index = i;
+												}
+											}										
+									}
+								comboGroupsctl.currentIndex = current_index;
+								comboGroupsctl.populatingModel = false;								
+							}
+                        }						
+                        currentIndex:
+                        {
+							if (( activeIndex !== undefined )&&( comboGroups !== undefined ))
+							{								
+								var currentValue = comboGroups.model[activeIndex]
+								var index = 0
+								for(var i = 0; i < comboGroups.length; i++)
+								{
+									if ( typeof comboGroups.get(i).key !== undefined )
+										if( comboGroups.get(i).key == currentValue ) {
+											index = i
+											break
+									}
+								}
+								return index								
+							}						
+                        }
+                        onCurrentIndexChanged:
+						{
+						if ( typeof comboGroups.get(currentIndex).key !== undefined )
+							{
+							currentText = comboGroups.get(currentIndex).key
+							manager.setContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_store_group", currentText)
+							}
+						}
+                    }
+					Timer
+                    {
+                        id: groupTimer
+                        interval: 500; running: true; repeat: true
+
+                        function check()
+                        {							
+							if(base.selectedInstance != null)
+							{
+								if ((base.selectedInstance.baseURL.trim() != "") && (apiKey.text.trim() != ""))
+								{	
+									if (manager.getGroups != undefined)
+									{										
+										if (manager.getGroups.length > 0)
+										{
+											comboGroups.populateModel();
+										}
+									}
+								}
+							}							
+                        }
+                        onTriggered:
+                        {
+							check();
+                        }
+                    }		
+                    UM.CheckBox
                     {
                         id: showCameraCheckBox
                         text: catalog.i18nc("@label", "Show webcam image")
@@ -409,7 +533,7 @@ Cura.MachineAction
                             manager.setContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_show_camera", String(checked))
                         }
                     }
-                    CheckBox
+                    UM.CheckBox
                     {
                         id: flipYCheckBox
                         text: catalog.i18nc("@label", "Flip Webcam Y")
@@ -420,7 +544,7 @@ Cura.MachineAction
                             manager.setContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_webcamflip_y", String(checked))
                         }
                     }
-                    CheckBox
+                    UM.CheckBox
                     {
                         id: flipXCheckBox
                         text: catalog.i18nc("@label", "Flip Webcam X")
@@ -431,7 +555,7 @@ Cura.MachineAction
                             manager.setContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_webcamflip_x", String(checked))
                         }
                     }
-                    CheckBox
+                    UM.CheckBox
                     {
                         id: rot90CheckBox
                         text: catalog.i18nc("@label", "Rotate Webcam 90")
@@ -442,7 +566,7 @@ Cura.MachineAction
                             manager.setContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_webcamrot_90", String(checked))
                         }
                     }
-                    CheckBox
+                    UM.CheckBox
                     {
                         id: rot180CheckBox
                         text: catalog.i18nc("@label", "Rotate Webcam 180")
@@ -453,7 +577,7 @@ Cura.MachineAction
                             manager.setContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_webcamrot_180", String(checked))
                         }
                     }                    
-                    CheckBox
+                    UM.CheckBox
                     {
                         id: rot270CheckBox
                         text: catalog.i18nc("@label", "Rotate Webcam 270")
@@ -464,7 +588,7 @@ Cura.MachineAction
                             manager.setContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_webcamrot_270", String(checked))
                         }
                     }
-                    CheckBox
+                    UM.CheckBox
                     {
                         id: storeOnSdCheckBox
                         text: catalog.i18nc("@label", "Store G-code on the printer SD card")
@@ -475,21 +599,21 @@ Cura.MachineAction
                             manager.setContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_store_sd", String(checked))
                         }
                     }
-                    Label
+                    UM.Label
                     {
                         visible: storeOnSdCheckBox.checked
                         wrapMode: Text.WordWrap
                         width: parent.width
                         text: catalog.i18nc("@label", "Note: Transfering files to the printer SD card takes very long. Using this option is not recommended.")
                     }
-                    CheckBox
+                    UM.CheckBox
                     {
                         id: fixGcodeFlavor
                         text: catalog.i18nc("@label", "Set Gcode flavor to \"Marlin\"")
                         checked: true
                         visible: machineGCodeFlavorProvider.properties.value == "UltiGCode"
                     }
-                    Label
+                    UM.Label
                     {
                         text: catalog.i18nc("@label", "Note: Printing UltiGCode using Repetier does not work. Setting Gcode flavor to \"Marlin\" fixes this, but overrides material settings on your printer.")
                         width: parent.width - UM.Theme.getSize("default_margin").width
@@ -503,13 +627,13 @@ Cura.MachineAction
                     visible: base.selectedInstance != null
                     spacing: UM.Theme.getSize("default_margin").width
 
-                    Button
+                    Cura.SecondaryButton
                     {
                         text: catalog.i18nc("@action", "Open in browser...")
                         onClicked: manager.openWebPage(base.selectedInstance.baseURL)
                     }
 
-                    Button
+                    Cura.SecondaryButton
                     {
                         text: catalog.i18nc("@action:button", "Connect")
                         enabled: apiKey.text != "" && manager.instanceApiKeyAccepted
@@ -518,7 +642,7 @@ Cura.MachineAction
                             if(fixGcodeFlavor.visible)
                             {
                                 manager.applyGcodeFlavorFix(fixGcodeFlavor.checked)
-                            }							
+                            }                            
                             manager.setInstanceId(base.selectedInstance.repetier_id)
                             manager.setApiKey(apiKey.text)
                             completed()
@@ -538,6 +662,7 @@ Cura.MachineAction
         watchedProperties: [ "value" ]
         storeIndex: 4
     }
+
     UM.Dialog
     {
         id: manualPrinterDialog
@@ -556,7 +681,7 @@ Cura.MachineAction
         minimumWidth: 400 * screenScaleFactor
         minimumHeight: (showAdvancedOptions.checked ? 340 : 220) * screenScaleFactor
         width: minimumWidth
-        height: minimumHeight		
+        height: minimumHeight        
 
         signal showDialog(string name, string address, string port, string path_, bool useHttps, string userName, string password, string repetierid)
         onShowDialog:
@@ -572,7 +697,7 @@ Cura.MachineAction
             httpsCheckbox.checked = useHttps;
             userNameText = userName;
             passwordText = password;
-            repidText = repetierid;			
+            repidText = repetierid;            
             manualPrinterDialog.show();
         }
 
@@ -591,7 +716,7 @@ Cura.MachineAction
                 pathText = "/" + pathText // ensure absolute path
             }
             manager.setManualInstance(nameText, addressText, parseInt(portText), pathText, httpsCheckbox.checked, userNameText, passwordText, repidText)
-			manager.setContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_id", repidText)
+            manager.setContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_id", repidText)
         }
 
         Column {
@@ -605,73 +730,57 @@ Cura.MachineAction
                 verticalItemAlignment: Grid.AlignVCenter
                 rowSpacing: UM.Theme.getSize("default_lining").height
 
-                Label
+                UM.Label
                 {
                     text: catalog.i18nc("@label","Instance Name")
                     width: Math.floor(parent.width * 0.4)    
                 }
 
-                TextField
+                Cura.TextField
                 {
                     id: nameField
                     maximumLength: 20
-                    width: Math.floor(parent.width * 0.6)    
-                    validator: RegExpValidator
-                    {
-                        regExp: /[a-zA-Z0-9\.\-\_ \']*/
-                    }
+                    width: Math.floor(parent.width * 0.6)                        
                 }
 
-                Label
+                UM.Label
                 {
                     text: catalog.i18nc("@label","IP Address or Hostname")
                     width: Math.floor(parent.width * 0.4)
                 }
 
-                TextField
+                Cura.TextField
                 {
                     id: addressField
                     maximumLength: 253
                     width: Math.floor(parent.width * 0.6)
-                    validator: RegExpValidator
-                    {
-                        regExp: /[a-zA-Z0-9\.\-\_]*/
-                    }
                 }
 
-                Label
+                UM.Label
                 {
                     text: catalog.i18nc("@label","Port Number")
                     width: Math.floor(parent.width * 0.4)
                 }
 
-                TextField
+                Cura.TextField
                 {
                     id: portField
                     maximumLength: 5
                     width: Math.floor(parent.width * 0.6)
-                    validator: RegExpValidator
-                    {
-                        regExp: /[0-9]*/
-                    }
                 }
-                Label
+                UM.Label
                 {
                     text: catalog.i18nc("@label","Path")
                     width: Math.floor(parent.width * 0.4)
                 }
 
-                TextField
+                Cura.TextField
                 {
                     id: pathField
                     maximumLength: 30
                     width: Math.floor(parent.width * 0.6)
-                    validator: RegExpValidator
-                    {
-                        regExp: /[a-zA-Z0-9\.\-\_\/]*/
-                    }
                 }
-                Button
+                Cura.SecondaryButton
                 {
                 text: catalog.i18nc("@action:button","Get Printers")
                 onClicked:
@@ -686,43 +795,44 @@ Cura.MachineAction
                             }                        
                     }
                 }
-                Label
+                UM.Label
                 {
                     text: catalog.i18nc("@label","")
                     width: Math.floor(parent.width * 0.4)    
                 }                
 
-                Label
+                UM.Label
                 {
                     text: catalog.i18nc("@label","Printer")
                     width: Math.floor(parent.width * 0.4)    
                 }
 
-                QQC2.ComboBox
+                Cura.ComboBox
                 {
                     model: ListModel
                     {
-                        id: comboPrinters						
+                        id: comboPrinters                        
                     }
                     currentIndex:
                     {
-                        var currentValue = propertyProvider.properties.value;
-                        var index = 0;
+                        var currentValue = comboPrinters[currentIndex]
+                        var index = 0
                         for(var i = 0; i < comboPrinters.length; i++)
                         {
-							if ( typeof comboPrinters.get(i).key !== "undefined" )
-								if(comboPrinters.get(i).key == currentValue) {
-									index = i;
-									break;
+                            if ( typeof comboPrinters.get(i).key != undefined )
+                                if(comboPrinters.get(i).key == currentValue) {
+                                    index = i
+                                    break
                             }
                         }
                         return index
                     }
-					onCurrentIndexChanged:
-						{
-						if ( typeof comboPrinters.get(currentIndex).key !== "undefined" )
-							editText=comboPrinters.get(currentIndex).key
-						}
+                    onCurrentIndexChanged:
+                        {
+						if (comboPrinters.get(currentIndex) != undefined)
+							if ( typeof comboPrinters.get(currentIndex).key != undefined )
+								currentText=comboPrinters.get(currentIndex).key
+                        }
                     textRole: "label"
                     editable: false
                     id: repid
@@ -731,7 +841,7 @@ Cura.MachineAction
             }
 
 
-            CheckBox
+            UM.CheckBox
             {
                 id: showAdvancedOptions
                 text: catalog.i18nc("@label","Show security options (advanced)")
@@ -745,37 +855,37 @@ Cura.MachineAction
                 verticalItemAlignment: Grid.AlignVCenter
                 rowSpacing: UM.Theme.getSize("default_lining").height
 
-                Label
+                UM.Label
                 {
                     text: catalog.i18nc("@label","Use HTTPS")
                     width: Math.floor(parent.width * 0.4)
                 }
 
-                CheckBox
+                UM.CheckBox
                 {
                     id: httpsCheckbox
                 }
 
-                Label
+                UM.Label
                 {
                     text: catalog.i18nc("@label","HTTP user name")
                     width: Math.floor(parent.width * 0.4)
                 }
 
-                TextField
+                Cura.TextField
                 {
                     id: userNameField
                     maximumLength: 64
                     width: Math.floor(parent.width * 0.6)
                 }
 
-                Label
+                UM.Label
                 {
                     text: catalog.i18nc("@label","HTTP password")
                     width: Math.floor(parent.width * 0.4)
                 }
 
-                TextField
+                Cura.TextField
                 {
                     id: passwordField
                     maximumLength: 64
@@ -786,7 +896,7 @@ Cura.MachineAction
 
             }
 
-            Label
+            UM.Label
             {
                 visible: showAdvancedOptions.checked
                 wrapMode: Text.WordWrap
@@ -797,7 +907,7 @@ Cura.MachineAction
         }
 
         rightButtons: [
-            Button {
+            Cura.SecondaryButton {
                 text: catalog.i18nc("@action:button","Cancel")
                 onClicked:
                 {
@@ -805,7 +915,7 @@ Cura.MachineAction
                     manualPrinterDialog.hide()
                 }
             },
-            Button {
+            Cura.PrimaryButton {
                 text: catalog.i18nc("@action:button", "Ok")
                 onClicked:
                 {
@@ -813,7 +923,6 @@ Cura.MachineAction
                     manualPrinterDialog.hide()
                 }
                 enabled: manualPrinterDialog.nameText.trim() != "" && manualPrinterDialog.addressText.trim() != "" && manualPrinterDialog.portText.trim() != "" && manualPrinterDialog.repidText.trim() != ""
-                isDefault: true
             }
         ]
     }

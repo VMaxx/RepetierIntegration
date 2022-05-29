@@ -1,8 +1,8 @@
 # Copyright (c) 2020 Aldo Hoeben / fieldOfView
 # NetworkReplyTimeout is released under the terms of the AGPLv3 or higher.
 
-from PyQt5.QtCore import QObject, QTimer
-from PyQt5.QtNetwork import QNetworkReply
+from PyQt6.QtCore import QObject, QTimer
+from PyQt6.QtNetwork import QNetworkReply
 
 from UM.Signal import Signal
 
