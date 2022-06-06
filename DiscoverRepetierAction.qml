@@ -831,8 +831,10 @@ Cura.MachineAction
                         {
 						if (comboPrinters.get(currentIndex) != undefined)
 							if ( typeof comboPrinters.get(currentIndex).key != undefined )
-								currentText=comboPrinters.get(currentIndex).key
-                        }
+								{
+								currentIndex = find(comboPrinters.get(currentIndex).key);								
+								}
+			}
                     textRole: "label"
                     editable: false
                     id: repid
