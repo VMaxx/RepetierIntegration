@@ -570,9 +570,9 @@ class DiscoverRepetierAction(MachineAction):
                         if len(json_data["webcams"])>0:
                             if "dynamicUrl" in json_data["webcams"][0]:
                                 Logger.log("d", "DiscoverRepetierAction: Checking streamurl")                                
+                                Logger.log("d", "DiscoverRepetierAction: reply_url: %s",reply.url())
                                 stream_url = json_data["webcams"][0]["dynamicUrl"].replace("127.0.0.1",re.findall( r'[0-9]+(?:\.[0-9]+){3}', reply.url().toString())[0])
                                 Logger.log("d", "DiscoverRepetierAction: stream_url: %s",stream_url)
-                                Logger.log("d", "DiscoverRepetierAction: reply_url: %s",reply.url())
                                 if stream_url: #not empty string or None
                                     self._instance_supports_camera = True
                 elif http_status_code == 401:
