@@ -539,7 +539,7 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         command_request.setRawHeader(self._api_header, self._api_key)
         if self._basic_auth_data:
             command_request.setRawHeader(self._basic_auth_header, self._basic_auth_data)                
-        command_request.setHeader(QNetworkRequest.ContentTypeHeader, "application/json")
+        command_request.setHeader(QNetworkRequestKnownHeaders.ContentTypeHeader, "application/json")
         if isinstance(commands, list):
             data = json.dumps({"commands": commands})
         else:
