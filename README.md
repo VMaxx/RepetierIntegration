@@ -25,7 +25,7 @@ How to use
 - Make sure Repetier is up and running
 - In Cura, under Manage printers select your printer.
 - Select "Connect to Repetier" on the Manage Printers page.
-- Click add and make sure you match the Name you give it in the plugin, with the name of the Printer in Cura.
+- Click add and **make sure you match the Name you give it in the plugin, with the name of the Printer in Cura.**
 - Fill in the IP and Port, if you have security turned on, click the advanced checkbox and enter that information
 - Click Get Printers button, it should populate the dropdown to select your repetier printer.
 - Click OK this will show the printer in the Printers list again but then ask for your Repetier API key.  Once that is filled you can check the extra options if you have a webcam and need to rotate it.
