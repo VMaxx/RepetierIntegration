@@ -64,8 +64,12 @@ class UnifiedConnectionState(IntEnum):
 #  Repetier connected (wifi / lan) printer using the Repetier API
 @signalemitter
 class RepetierOutputDevice(NetworkedPrinterOutputDevice):
-    def __init__(self, instance_id: str, address: str, port: int, properties: dict, **kwargs) -> None:
-        super().__init__(device_id = instance_id, address = address, properties = properties, **kwargs)
+    def __init__(
+        self, instance_id: str, address: str, port: int, properties: dict, **kwargs
+    ) -> None:
+        super().__init__(
+            device_id=instance_id, address=address, properties=properties, **kwargs
+        )
 
         self._address = address
         self._port = port
@@ -76,6 +80,8 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         self._repetier_id = properties.get(b"repetier_id", b"").decode("utf-8")
         self._properties = properties  # Properties dict as provided by zero conf
 
+        self._printer_model = ""
+        self._printer_name = ""
         self._gcode_stream = StringIO()
 
         self._auto_print = True
@@ -87,7 +93,9 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         self._number_of_extruders = 1
 
         # Try to get version information from plugin.json
-        plugin_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "plugin.json")
+        plugin_file_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "plugin.json"
+        )
         try:
             with open(plugin_file_path) as plugin_file:
                 plugin_info = json.load(plugin_file)
@@ -112,7 +120,12 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         self._api_key = b""
 
         self._protocol = "https" if properties.get(b'useHttps') == b"true" else "http"
-        self._base_url = "%s://%s:%d%s" % (self._protocol, self._address, self._port, self._path)
+        self._base_url = "%s://%s:%d%s" % (
+            self._protocol,
+            self._address,
+            self._port,
+            self._path,
+        )
         self._api_url = self._base_url + self._api_prefix
         self._job_url = self._base_url + self._job_prefix
         self._save_url = self._base_url + self._save_prefix
@@ -122,10 +135,15 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         basic_auth_username = properties.get(b"userName", b"").decode("utf-8")
         basic_auth_password = properties.get(b"password", b"").decode("utf-8")
         if basic_auth_username and basic_auth_password:
-            data = base64.b64encode(("%s:%s" % (basic_auth_username, basic_auth_password)).encode()).decode("utf-8")
+            data = base64.b64encode(
+                ("%s:%s" % (basic_auth_username, basic_auth_password)).encode()
+            ).decode("utf-8")
             self._basic_auth_data = ("basic %s" % data).encode()
 
-        self._monitor_view_qml_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "MonitorItem.qml")
+#        self._monitor_view_qml_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "MonitorItem.qml")
+        self._monitor_view_qml_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "qml", "MonitorItem.qml"
+        )
 
         name = self._id
         matches = re.search(r"^\"(.*)\"\._Repetier\._tcp.local$", name)
@@ -191,7 +209,7 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         self._api_key = api_key.encode()
 
     #  Name of the instance (as returned from the zeroConf properties)
-    @pyqtProperty(str, constant = True)
+    @pyqtProperty(str, constant=True)
     def name(self) -> str:
         return self._name
 
@@ -292,6 +310,10 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         if not gcode_writer.write(self._gcode_stream, None):
             Logger.log("e", "GCodeWrite failed: %s" % gcode_writer.getInformation())
             return
+        global_container_stack = CuraApplication.getInstance().getGlobalContainerStack()
+        if not global_container_stack or not self.activePrinter:
+            Logger.log("e", "There is no active printer to send the print")
+            return			
         self.startPrint()
 
     ##  Start requesting data from the instance
@@ -539,7 +561,7 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         command_request.setRawHeader(self._api_header, self._api_key)
         if self._basic_auth_data:
             command_request.setRawHeader(self._basic_auth_header, self._basic_auth_data)                
-        command_request.setHeader(QNetworkRequestKnownHeaders.ContentTypeHeader, "application/json")
+        command_request.setHeader(QNetworkRequest.KnownHeaders.ContentTypeHeader, "application/json")
         if isinstance(commands, list):
             data = json.dumps({"commands": commands})
         else:
@@ -1010,7 +1032,7 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         request.setRawHeader(b"User-Agent", self._user_agent.encode())
 
         if content_type is not None:
-            request.setHeader(QNetworkRequestKnownHeaders.ContentTypeHeader, content_type)
+            request.setHeader(QNetworkRequest.KnownHeaders.ContentTypeHeader, content_type)
 #            request.setHeader(QNetworkRequest.ContentTypeHeader, content_type)
 
         # ignore SSL errors (eg for self-signed certificates)
@@ -1034,7 +1056,7 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         part.setHeader(QNetworkRequestKnownHeaders.ContentDispositionHeader, content_header)
         if content_type is not None:
 #            part.setHeader(QNetworkRequest.ContentTypeHeader, content_type)
-            part.setHeader(QNetworkRequestKnownHeaders.ContentTypeHeader, content_type)
+            part.setHeader(QNetworkRequest.KnownHeaders.ContentTypeHeader, content_type)
 
         part.setBody(data)
         return part
