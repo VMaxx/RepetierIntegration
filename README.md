@@ -1,16 +1,16 @@
 # RepetierIntegration
-# Version 5.0
+# Version 5.1
 Shane Bumpurs
 
 Cura plugin which enables printing directly to Repetier and monitoring the progress
 The name has changed to RepetierIntegration in the plugin folder.
 This plugin is basically a copy of the Octoprint plugin with the necessary changes to work with repetier server.
-Updated to 5.0, this version will not work with any lower versions.
+Updated to 5.1, this version will not work with 5.0+.
 
 Installation
 ----
 * Manually:
-  - Make sure your Cura version is 5.0
+  - Make sure your Cura version is 5.0+
   - Download or clone the repository into [Cura installation folder]/plugins/RepetierIntegration
     or in the plugins folder inside the configuration folder. The configuration folder can be
     found via Help -> Show Configuration Folder inside Cura.
