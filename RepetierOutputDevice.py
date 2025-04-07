@@ -773,7 +773,11 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                         Logger.log("d", "RepetierOutputDevice: Detected Repetier 89.X")
                         self._camera_shares_proxy = False
                         Logger.log("d", "RepetierOutputDevice: Checking streamurl")                        
-                        stream_url = json_data["webcam"]["dynamicUrl"].replace("127.0.0.1",self._address)
+                        stream_url = json_data["webcam"]["dynamicUrl"]
+                        if not stream_url: #empty string or None
+                            self._camera_url = ""
+                        else:
+                            stream_url = stream_url.replace("127.0.0.1",self._address)
                         if not stream_url: #empty string or None
                             self._camera_url = ""
                         elif stream_url[:4].lower() == "http": # absolute uri                        Logger.log("d", "RepetierOutputDevice: stream_url: %s",stream_url)
