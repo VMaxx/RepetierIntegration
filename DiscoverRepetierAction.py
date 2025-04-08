@@ -560,7 +560,10 @@ class DiscoverRepetierAction(MachineAction):
                     if "webcam" in json_data and "dynamicUrl" in json_data["webcam"]:
                         Logger.log("d", "DiscoverRepetierAction: Checking streamurl")
                         Logger.log("d", "DiscoverRepetierAction: %s", reply.url())
-                        stream_url = json_data["webcam"]["dynamicUrl"].replace("127.0.0.1",re.findall( r'[0-9]+(?:\.[0-9]+){3}', reply.url().toString())[0])
+                        if not json_data["webcam"]["dynamicUrl"]: #empty string or None
+                             stream_url = ""
+                        else:
+                             stream_url = json_data["webcam"]["dynamicUrl"].replace("127.0.0.1",re.findall( r'[0-9]+(?:\.[0-9]+){3}', reply.url().toString())[0])
                         Logger.log("d", "DiscoverRepetierAction: stream_url: %s",stream_url)
                         Logger.log("d", "DiscoverRepetierAction: reply_url: %s",reply.url())
                         if stream_url: #not empty string or None
@@ -571,10 +574,12 @@ class DiscoverRepetierAction(MachineAction):
                             if "dynamicUrl" in json_data["webcams"][0]:
                                 Logger.log("d", "DiscoverRepetierAction: Checking streamurl")                                
                                 Logger.log("d", "DiscoverRepetierAction: reply_url: %s",reply.url())								
-                                stream_url = ""
-                                #stream_url = json_data["webcams"][0]["dynamicUrl"].replace("127.0.0.1",re.findall( r'[0-9]+(?:\.[0-9]+){3}', reply.url().toString())[0])
+                                stream_url = ""                                
                                 if len(re.findall( r'[0-9]+(?:\.[0-9]+){3}', reply.url().toString()))>0:
-                                     stream_url = json_data["webcams"][0]["dynamicUrl"].replace("127.0.0.1",re.findall( r'[0-9]+(?:\.[0-9]+){3}', reply.url().toString())[0])
+                                     if not json_data["webcams"][0]["dynamicUrl"]: #empty string or None
+                                          stream_url = ""
+                                     else:
+                                          stream_url = json_data["webcams"][0]["dynamicUrl"].replace("127.0.0.1",re.findall( r'[0-9]+(?:\.[0-9]+){3}', reply.url().toString())[0])
                                 Logger.log("d", "DiscoverRepetierAction: stream_url: %s",stream_url)
                                 if stream_url: #not empty string or None
                                     self._instance_supports_camera = True
