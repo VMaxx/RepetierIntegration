@@ -318,6 +318,10 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
 
     ##  Start requesting data from the instance
     def connect(self) -> None:
+        if self._connection_state in (UnifiedConnectionState.Connecting, UnifiedConnectionState.Connected):
+            # Already (re)connecting; the running poll timer picks up a changed API key on its own.
+            return
+
         self._createNetworkManager()
 
         self.setConnectionState(cast(ConnectionState, UnifiedConnectionState.Connecting))
@@ -489,7 +493,7 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
         post_parts.append(post_part)
 
         destination = "local"
-        if self._sd_supported and parseBool(global_container_stack.getMetaDataEntry("Repetier_store_sd", False)):
+        if self._sd_supported and parseBool(global_container_stack.getMetaDataEntry("repetier_store_sd", False)):
             destination = "sdcard"
 
         try:
@@ -608,12 +612,13 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                 if not self._printers:
                     self._createPrinterList()
                 printer = self._printers[0]
+                printer_state = "idle"
                 if http_status_code == 200:
                     if not self.acceptsCommands:
                         self._setAcceptsCommands(True)
                         self.setConnectionText(i18n_catalog.i18nc("@info:status", "Connected to Repetier on {0}").format(self._repetier_id))
 
-                    if self._connection_state == UnifiedConnectionState.Connecting:
+                    if self._connection_state != UnifiedConnectionState.Connected:
                         self.setConnectionState(cast(ConnectionState, UnifiedConnectionState.Connected))
                     try:
                         json_data = json.loads(bytes(reply.readAll()).decode("utf-8"))
@@ -672,15 +677,17 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                                     printer.updateTargetBedTemperature(0)
                                     printer.updateState(printer_state)
                     except:
-                        Logger.log("w", "Received invalid JSON from Repetier instance.2")                    
+                        Logger.log("w", "Received invalid JSON from Repetier instance.2")
                         json_data = {}
-                        printer.activePrintJob.updateState("offline")
+                        if printer.activePrintJob:
+                            printer.activePrintJob.updateState("offline")
                         self.setConnectionText(i18n_catalog.i18nc("@info:status", "Repetier on {0} configuration is invalid").format(self._repetier_id))
 
                 elif http_status_code == 401:
                     printer.updateState("offline")
                     if printer.activePrintJob:
                         printer.activePrintJob.updateState("offline")
+                    self.setConnectionState(cast(ConnectionState, UnifiedConnectionState.Error))
                     self.setConnectionText(i18n_catalog.i18nc("@info:status", "Repetier on {0} does not allow access to print").format(self._repetier_id))
                     error_handled = True
                 elif http_status_code == 409:
@@ -753,7 +760,7 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                     except:
                         if printer.activePrintJob is not None:
                              printer.activePrintJob.updateState("offline")
-                        self.setConnectionText(i18n_catalog.i18nc("@info:status", "Repetier on {0} configuration is invalid").format(self._key))
+                        self.setConnectionText(i18n_catalog.i18nc("@info:status", "Repetier on {0} configuration is invalid").format(self._repetier_id))
                 else:
                     if printer.activePrintJob is not None:
                         printer.activePrintJob.updateState("offline")
@@ -971,6 +978,11 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
             message.actionTriggered.connect(self._openRepetierPrint)
             message.show()
         elif self._auto_print:
+            if not location_url:
+                # Repetier-Server starts the print itself as part of the job upload and does not
+                # return a Location header (unlike the OctoPrint API this code was ported from).
+                Logger.log("d", "No Location header on job upload; Repetier already started the print itself.")
+                return
             end_point = location_url.toString().split(self._api_prefix, 1)[1]
             if self._ufp_supported and end_point.endswith(".ufp"):
                 end_point += ".gcode"

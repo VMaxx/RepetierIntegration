@@ -108,28 +108,14 @@ Cura.MachineAction
                 enabled: base.selectedInstance != null && base.selectedInstance.getProperty("manual") == "true"
                 onClicked:
                 {
-					if (Cura.ContainerManager.getContainerMetaDataEntry(base.selectedInstance.name, "repetier_id") != null)
-						{
-						manualPrinterDialog.showDialog(
-							base.selectedInstance.name, base.selectedInstance.ipAddress,
-							base.selectedInstance.port, base.selectedInstance.path,
-							base.selectedInstance.getProperty("useHttps") == "true",						
-							base.selectedInstance.getProperty("userName"), 
-							base.selectedInstance.getProperty("password"), 
-							Cura.ContainerManager.getContainerMetaDataEntry(base.selectedInstance.name, "repetier_id")							
-						);
-						}
-					else
-						{
-						manualPrinterDialog.showDialog(
-							base.selectedInstance.name, base.selectedInstance.ipAddress,
-							base.selectedInstance.port, base.selectedInstance.path,
-							base.selectedInstance.getProperty("useHttps") == "true",						
-							base.selectedInstance.getProperty("userName"), 
-							base.selectedInstance.getProperty("password"), 
-							""
-						);
-						}
+					manualPrinterDialog.showDialog(
+						base.selectedInstance.name, base.selectedInstance.ipAddress,
+						base.selectedInstance.port, base.selectedInstance.path,
+						base.selectedInstance.getProperty("useHttps") == "true",
+						base.selectedInstance.getProperty("userName"),
+						base.selectedInstance.getProperty("password"),
+						base.selectedInstance.repetier_id
+					);
                 }
             }
 
@@ -176,7 +162,7 @@ Cura.MachineAction
                     model: manager.discoveredInstances
                     onModelChanged:
                     {
-                        var selectedId = manager.instanceId;
+                        var selectedId = manager.linkedInstanceId;
                         for(var i = 0; i < model.length; i++) {
                             if(model[i].getId() == selectedId)
                             {
@@ -209,7 +195,7 @@ Cura.MachineAction
                             anchors.right: parent.right
                             text: listview.model[index].name
                             elide: Text.ElideRight
-                            font.italic: listview.model[index].key == manager.instanceId
+                            font.weight: listview.model[index].getId() == manager.linkedInstanceId ? 625 : Font.Normal
                             wrapMode: Text.NoWrap
                         }
 
@@ -281,8 +267,8 @@ Cura.MachineAction
                     UM.Label
                     {
                         id: lblRepID
-                        width: Math.floor(parent.width * 0.2)    
-                        text: base.selectedInstance ? Cura.ContainerManager.getContainerMetaDataEntry(base.selectedInstance.name, "repetier_id") : ""
+                        width: Math.floor(parent.width * 0.2)
+                        text: base.selectedInstance ? base.selectedInstance.repetier_id : ""
                     }                    
                     UM.Label
                     {
@@ -293,8 +279,8 @@ Cura.MachineAction
                     Cura.TextField
                     {
                         id: apiKey
-                        width: Math.floor(parent.width * 0.8 - UM.Theme.getSize("default_margin").width)                            
-                        text: base.selectedInstance ? Cura.ContainerManager.getContainerMetaDataEntry(base.selectedInstance.name, "repetier_api_key") : ""
+                        width: Math.floor(parent.width * 0.8 - UM.Theme.getSize("default_margin").width)
+                        text: Cura.ContainerManager.getContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_api_key")
                         onTextChanged:
                         {
                             apiCheckDelay.throttledCheck()
@@ -308,9 +294,8 @@ Cura.MachineAction
                         {
                             if(base.selectedInstance != null)
                             {
-                                lblRepID.text = Cura.ContainerManager.getContainerMetaDataEntry(base.selectedInstance.name, "repetier_id")
-                                apiKey.text = Cura.ContainerManager.getContainerMetaDataEntry(base.selectedInstance.name, "repetier_api_key")
-                                //apiKey.text = manager.getApiKey(base.selectedInstance.getId())
+                                lblRepID.text = base.selectedInstance.repetier_id
+                                apiKey.text = Cura.ContainerManager.getContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_api_key")
                             }
                         }
                     }
@@ -450,7 +435,8 @@ Cura.MachineAction
 										{
 										if(manager.getGroups[i] != "")
 											{
-											comboGroups.append({ label: catalog.i18nc("@action:ComboBox option", manager.getGroups[i]), key: manager.getGroups[i] });																											
+											var groupLabel = manager.getGroups[i] == "#" ? catalog.i18nc("@action:ComboBox option", "(Default)") : catalog.i18nc("@action:ComboBox option", manager.getGroups[i]);
+											comboGroups.append({ label: groupLabel, key: manager.getGroups[i] });
 											}
 										}													
 									}
@@ -466,8 +452,12 @@ Cura.MachineAction
 												}
 											}										
 									}
+								if (current_index == -1 && comboGroups.count > 0)
+									{
+									current_index = 0;
+									}
 								comboGroupsctl.currentIndex = current_index;
-								comboGroupsctl.populatingModel = false;								
+								comboGroupsctl.populatingModel = false;
 							}
                         }						
                         currentIndex:
@@ -622,6 +612,12 @@ Cura.MachineAction
                     }
                 }
 
+                UM.Label
+                {
+                    visible: base.selectedInstance != null && base.selectedInstance.getId() == manager.linkedInstanceId
+                    text: catalog.i18nc("@label", "This is the Repetier instance currently linked to this printer.")
+                }
+
                 Flow
                 {
                     visible: base.selectedInstance != null
@@ -636,18 +632,19 @@ Cura.MachineAction
                     Cura.SecondaryButton
                     {
                         text: catalog.i18nc("@action:button", "Connect")
-                        enabled: apiKey.text != "" && manager.instanceApiKeyAccepted
+                        enabled: apiKey.text != "" && manager.instanceApiKeyAccepted && base.selectedInstance.getId() != manager.linkedInstanceId
                         onClicked:
                         {
                             if(fixGcodeFlavor.visible)
                             {
                                 manager.applyGcodeFlavorFix(fixGcodeFlavor.checked)
-                            }                            
+                            }
+                            manager.setContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_instance_id", base.selectedInstance.getId())
                             manager.setInstanceId(base.selectedInstance.repetier_id)
                             manager.setApiKey(apiKey.text)
                             completed()
                         }
-                    }                
+                    }
                 }
             }
         }
@@ -716,7 +713,6 @@ Cura.MachineAction
                 pathText = "/" + pathText // ensure absolute path
             }
             manager.setManualInstance(nameText, addressText, parseInt(portText), pathText, httpsCheckbox.checked, userNameText, passwordText, repidText)
-            manager.setContainerMetaDataEntry(Cura.MachineManager.activeMachine.id, "repetier_id", repidText)
         }
 
         Column {
@@ -783,16 +779,35 @@ Cura.MachineAction
                 Cura.SecondaryButton
                 {
                 text: catalog.i18nc("@action:button","Get Printers")
+                enabled: !manager.isFetchingPrinters
                 onClicked:
                     {
                         manager.getPrinterList("http://" + manualPrinterDialog.addressText.trim()+":"+manualPrinterDialog.portText.trim()+"/")
-                        if (manager.getPrinters.length>0)
+                    }
+                }
+                Connections
+                {
+                    target: manager
+                    function onPrintersChanged()
+                    {
+                        var previousKey = (repid.currentIndex >= 0 && comboPrinters.get(repid.currentIndex) !== undefined) ? comboPrinters.get(repid.currentIndex).key : undefined
+
+                        comboPrinters.clear()
+                        for (var i = 0; i < manager.getPrinters.length; i++)
+                            if(manager.getPrinters[i] != "")
+                                comboPrinters.append({ label: catalog.i18nc("@action:ComboBox option", manager.getPrinters[i]), key: manager.getPrinters[i] })
+
+                        if (previousKey !== undefined)
+                        {
+                            for (var j = 0; j < comboPrinters.count; j++)
                             {
-                                comboPrinters.clear()
-                                for (var i =0;i<manager.getPrinters.length;i++)
-                                    if(comboPrinters[i] != "")
-                                        comboPrinters.append({ label: catalog.i18nc("@action:ComboBox option", manager.getPrinters[i]), key: manager.getPrinters[i] })
-                            }                        
+                                if (comboPrinters.get(j).key == previousKey)
+                                {
+                                    repid.currentIndex = j
+                                    break
+                                }
+                            }
+                        }
                     }
                 }
                 UM.Label

@@ -1,6 +1,12 @@
 # RepetierIntegration
-# Version 5.1
-Shane Bumpurs
+# Version 5.2
+Mick Mifsud
+
+### 🛠️ Bugfixed by Claude — connection setup now works as expected
+
+The connect-a-new-printer flow used to be flaky (API key not sticking, printer selection resetting,
+repeated delete/re-add just to get a connection). Those issues have been found and fixed; see the
+git history for details. Ordinary use once connected was never affected.
 
 Cura plugin which enables printing directly to Repetier and monitoring the progress
 The name has changed to RepetierIntegration in the plugin folder.
@@ -25,15 +31,9 @@ How to use
 - Make sure Repetier is up and running
 - In Cura, under Manage printers select your printer.
 - Select "Connect to Repetier" on the Manage Printers page.
-- Click add and **make sure you match the Name you give it in the plugin, with the name of the Printer in Cura.**
-- Fill in the IP and Port, if you have security turned on, click the advanced checkbox and enter that information
+- Click add, fill in the IP and Port, if you have security turned on, click the advanced checkbox and enter that information
 - Click Get Printers button, it should populate the dropdown to select your repetier printer.
 - Click OK this will show the printer in the Printers list again but then ask for your Repetier API key.  Once that is filled you can check the extra options if you have a webcam and need to rotate it.
+- Once the API key is accepted, the "Connect" button becomes available — click it to link this Repetier instance to the current Cura printer (the linked instance is shown in bold in the list).
 - If you do not want to print immediately but have your print job stored uncheck "Automatically start print job after uploading"
 - From this point on, the print monitor should be functional and you should be able to switch to "Print to Repetier" on the bottom of the sidebar.
-  
-  Config example:
-  ![alt text](https://user-images.githubusercontent.com/12956626/59142707-9d0d5e00-8987-11e9-94f7-53bc2707e3d1.jpg "Config") 
-  
-     Cura has a bug so that if you have ever renamed your printer this plugin won't work.  You'll have to create a new printer from scratch.
-  

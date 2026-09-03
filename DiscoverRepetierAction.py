@@ -15,8 +15,7 @@ from PyQt6.QtCore import pyqtSignal, pyqtProperty, pyqtSlot, QUrl, QObject, QTim
 from PyQt6.QtQml import QQmlComponent, QQmlContext
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import QMessageBox
-from PyQt6.QtNetwork import QNetworkRequest, QNetworkAccessManager, QNetworkReply
-from .NetworkReplyTimeout import NetworkReplyTimeout
+from PyQt6.QtNetwork import QNetworkRequest, QNetworkAccessManager, QNetworkReply, QSslConfiguration, QSslSocket
 from .RepetierOutputDevicePlugin import RepetierOutputDevicePlugin
 from .RepetierOutputDevice import RepetierOutputDevice
 
@@ -50,11 +49,11 @@ class DiscoverRepetierAction(MachineAction):
         self._network_manager = QNetworkAccessManager()
         self._network_manager.finished.connect(self._onRequestFinished)
         self._printers = [""]
+        self._is_fetching_printers = False
         self._groups = [""]
         self._printerlist_reply = None
         self._groupslist_reply = None
         self._settings_reply = None
-        self._settings_reply_timeout = None # type: Optional[NetworkReplyTimeout]
 
         self._instance_supports_appkeys = False
         self._appkey_reply = None # type: Optional[QNetworkReply]
@@ -196,6 +195,15 @@ class DiscoverRepetierAction(MachineAction):
 
         return global_container_stack.getMetaDataEntry("repetier_id", "")
 
+    ##  The discovery/manual instance id (RepetierOutputDevice.getId()) linked to the active machine.
+    @pyqtProperty(str, notify = instanceIdChanged)
+    def linkedInstanceId(self) -> str:
+        global_container_stack = self._application.getGlobalContainerStack()
+        if not global_container_stack:
+            return ""
+
+        return global_container_stack.getMetaDataEntry("repetier_instance_id", "")
+
     @pyqtSlot(str)
     @pyqtSlot(result = str)
     def getInstanceId(self) -> str:
@@ -257,12 +265,14 @@ class DiscoverRepetierAction(MachineAction):
         self._appkey_reply = self._network_manager.get(appkey_probe_request)
 
     @pyqtSlot(str)
-    def getPrinterList(self, base_url):        
+    def getPrinterList(self, base_url):
         self._instance_responded = False
+        self._is_fetching_printers = True
+        self.isFetchingPrintersChanged.emit()
         Logger.log("d", "getPrinterList:base_url:" + base_url)
         url = QUrl( base_url + "printer/info")
         Logger.log("d", "getPrinterList:" + url.toString())
-        settings_request = QNetworkRequest(url)        
+        settings_request = QNetworkRequest(url)
         settings_request.setRawHeader("User-Agent".encode(), self._user_agent)
         self._printerlist_reply=self._network_manager.get(settings_request)
         return self._printers
@@ -293,8 +303,6 @@ class DiscoverRepetierAction(MachineAction):
             if self._settings_reply.isRunning():
                 self._settings_reply.abort()
             self._settings_reply = None
-        if self._settings_reply_timeout:
-            self._settings_reply_timeout = None
         if ((api_key != "") and (api_key != None) and (work_id != "")):
             Logger.log("d", "Trying to access Repetier instance at %s with the provided API key." % base_url)
             Logger.log("d", "Using %s as work_id" % work_id)
@@ -341,10 +349,16 @@ class DiscoverRepetierAction(MachineAction):
         return api_key
 
     selectedInstanceSettingsChanged = pyqtSignal()
+    printersChanged = pyqtSignal()
+    isFetchingPrintersChanged = pyqtSignal()
 
-    @pyqtProperty(list)
+    @pyqtProperty(list, notify = printersChanged)
     def getPrinters(self):
         return self._printers
+
+    @pyqtProperty(bool, notify = isFetchingPrintersChanged)
+    def isFetchingPrinters(self):
+        return self._is_fetching_printers
 
     @pyqtProperty(list)
     def getGroups(self):
@@ -478,6 +492,10 @@ class DiscoverRepetierAction(MachineAction):
 
     #  Handler for all requests that have finished.
     def _onRequestFinished(self, reply: QNetworkReply) -> None:
+        if "printer/info" in reply.url().toString() and self._is_fetching_printers:
+            self._is_fetching_printers = False
+            self.isFetchingPrintersChanged.emit()
+
         if reply.error() == QNetworkReplyNetworkErrors.TimeoutError:
 #        if reply.error() == QNetworkReply.TimeoutError:
             QMessageBox.warning(None,'Connection Timeout','Connection Timeout')
@@ -510,6 +528,7 @@ class DiscoverRepetierAction(MachineAction):
                             for printerinfo in json_data["printers"]:
                                  Logger.log("d", "Slug: %s",printerinfo["slug"])
                                  self._printers.append(printerinfo["slug"])
+                            self.printersChanged.emit()
 
                     if "apikey" in json_data:
                         Logger.log("d", "DiscoverRepetierAction: apikey: %s",json_data["apikey"])
@@ -593,7 +612,7 @@ class DiscoverRepetierAction(MachineAction):
 
     def _createRequest(self, url: str, basic_auth_username: str = "", basic_auth_password: str = "") -> QNetworkRequest:
         request = QNetworkRequest(url)
-        request.setAttribute(QNetworkRequest.FollowRedirectsAttribute, True)
+        request.setAttribute(QNetworkRequest.Attribute.FollowRedirectsAttribute, True)
         request.setRawHeader(b"User-Agent", self._user_agent)
 
         if basic_auth_username and basic_auth_password:
@@ -602,7 +621,7 @@ class DiscoverRepetierAction(MachineAction):
 
         # ignore SSL errors (eg for self-signed certificates)
         ssl_configuration = QSslConfiguration.defaultConfiguration()
-        ssl_configuration.setPeerVerifyMode(QSslSocket.VerifyNone)
+        ssl_configuration.setPeerVerifyMode(QSslSocket.PeerVerifyMode.VerifyNone)
         request.setSslConfiguration(ssl_configuration)
 
         return request

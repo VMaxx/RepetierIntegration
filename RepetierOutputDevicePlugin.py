@@ -130,17 +130,39 @@ class RepetierOutputDevicePlugin(OutputDevicePlugin):
         Logger.log("w", "No instance found with id %s", instance_id)
         return None
 
+    ##  Whether instance `key` is the one linked to the active machine via "repetier_instance_id".
+    #   Falls back to the legacy (coincidental) match on Cura's own container "id" for older
+    #   profiles, self-healing by backfilling "repetier_instance_id" when that happens.
+    def _isLinkedInstance(self, key: str, global_container_stack) -> bool:
+        linked_id = global_container_stack.getMetaDataEntry("repetier_instance_id", "")
+        if linked_id:
+            return key == linked_id
+
+        if key == global_container_stack.getMetaDataEntry("id"):
+            global_container_stack.setMetaDataEntry("repetier_instance_id", key)
+            return True
+
+        return False
+
+    ##  (Re)connect connectionStateChanged without stacking duplicate connections on repeat calls.
+    def _connectInstanceSignals(self, instance: RepetierOutputDevice) -> None:
+        try:
+            instance.connectionStateChanged.disconnect(self._onInstanceConnectionStateChanged)
+        except TypeError:
+            pass
+        instance.connectionStateChanged.connect(self._onInstanceConnectionStateChanged)
+
     def reCheckConnections(self) -> None:
         global_container_stack = Application.getInstance().getGlobalContainerStack()
         if not global_container_stack:
             return
 
         for key in self._instances:
-            if key == global_container_stack.getMetaDataEntry("id"):
+            if self._isLinkedInstance(key, global_container_stack):
                 api_key = global_container_stack.getMetaDataEntry("repetier_api_key", "")
                 self._instances[key].setApiKey(api_key)
                 self._instances[key].setShowCamera(parseBool(global_container_stack.getMetaDataEntry("repetier_show_camera", "true")))
-                self._instances[key].connectionStateChanged.connect(self._onInstanceConnectionStateChanged)
+                self._connectInstanceSignals(self._instances[key])
                 self._instances[key].connect()
             else:
                 if self._instances[key].isConnected():
@@ -151,11 +173,11 @@ class RepetierOutputDevicePlugin(OutputDevicePlugin):
         instance = RepetierOutputDevice(name, address, port, properties)
         self._instances[instance.getId()] = instance
         global_container_stack = Application.getInstance().getGlobalContainerStack()
-        if global_container_stack and instance.getId() == global_container_stack.getMetaDataEntry("id"):
+        if global_container_stack and self._isLinkedInstance(instance.getId(), global_container_stack):
             api_key = global_container_stack.getMetaDataEntry("repetier_api_key", "")
             instance.setApiKey(api_key)
             instance.setShowCamera(parseBool(global_container_stack.getMetaDataEntry("repetier_show_camera", "true")))
-            instance.connectionStateChanged.connect(self._onInstanceConnectionStateChanged)
+            self._connectInstanceSignals(instance)
             instance.connect()
 
     def removeInstance(self, name: str) -> None:
