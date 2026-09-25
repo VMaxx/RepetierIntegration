@@ -631,8 +631,11 @@ Cura.MachineAction
 
                     Cura.SecondaryButton
                     {
-                        text: catalog.i18nc("@action:button", "Connect")
-                        enabled: apiKey.text != "" && manager.instanceApiKeyAccepted && base.selectedInstance.getId() != manager.linkedInstanceId
+                        text: (base.selectedInstance != null && base.selectedInstance.getId() == manager.linkedInstanceId) ? catalog.i18nc("@action:button", "Save") : catalog.i18nc("@action:button", "Connect")
+                        // Stays enabled for the already-linked instance so that a changed API key
+                        // (eg. after moving the printers to another Repetier server) can be re-saved
+                        // without deleting and recreating the connection.
+                        enabled: apiKey.text != "" && manager.instanceApiKeyAccepted
                         onClicked:
                         {
                             if(fixGcodeFlavor.visible)
@@ -700,10 +703,6 @@ Cura.MachineAction
 
         onAccepted:
         {
-            if(oldName != nameText)
-            {
-                manager.removeManualInstance(oldName);
-            }
             if(portText == "")
             {
                 portText = "3344" // default http port
@@ -712,8 +711,12 @@ Cura.MachineAction
             {
                 pathText = "/" + pathText // ensure absolute path
             }
-            manager.setManualInstance(nameText, addressText, parseInt(portText), pathText, httpsCheckbox.checked, userNameText, passwordText, repidText)
+            manager.setManualInstance(oldName, nameText.trim(), addressText, parseInt(portText), pathText, httpsCheckbox.checked, userNameText, passwordText, repidText)
         }
+
+        // Instance names identify a printer inside the plugin, so a duplicate would overwrite
+        // the other instance and hijack the machine linked to it.
+        property bool nameIsTaken: manualPrinterDialog.visible && manager.instanceNameTaken(nameField.text, oldName)
 
         Column {
             anchors.fill: parent
@@ -736,7 +739,23 @@ Cura.MachineAction
                 {
                     id: nameField
                     maximumLength: 20
-                    width: Math.floor(parent.width * 0.6)                        
+                    width: Math.floor(parent.width * 0.6)
+                }
+
+                UM.Label
+                {
+                    text: ""
+                    width: Math.floor(parent.width * 0.4)
+                    visible: manualPrinterDialog.nameIsTaken
+                }
+
+                UM.Label
+                {
+                    text: catalog.i18nc("@label","Another instance is already using this name. Instance names must be unique.")
+                    width: Math.floor(parent.width * 0.6)
+                    wrapMode: Text.WordWrap
+                    color: UM.Theme.getColor("error")
+                    visible: manualPrinterDialog.nameIsTaken
                 }
 
                 UM.Label
@@ -939,7 +958,7 @@ Cura.MachineAction
                     manualPrinterDialog.accept()
                     manualPrinterDialog.hide()
                 }
-                enabled: manualPrinterDialog.nameText.trim() != "" && manualPrinterDialog.addressText.trim() != "" && manualPrinterDialog.portText.trim() != "" && manualPrinterDialog.repidText.trim() != ""
+                enabled: manualPrinterDialog.nameText.trim() != "" && manualPrinterDialog.addressText.trim() != "" && manualPrinterDialog.portText.trim() != "" && manualPrinterDialog.repidText.trim() != "" && !manualPrinterDialog.nameIsTaken
             }
         ]
     }

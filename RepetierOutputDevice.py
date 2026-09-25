@@ -383,9 +383,9 @@ class RepetierOutputDevice(NetworkedPrinterOutputDevice):
                 # allow queueing the job even if Repetier is currently busy if autoprinting is disabled
                 self._error_message = None
             elif self.activePrinter.state == "offline":
-                error_string = Message(i18n_catalog.i18nc("@info:status", "The printer is offline. Unable to start a new job."))
+                error_string = i18n_catalog.i18nc("@info:status", "The printer is offline. Unable to start a new job.")
             else:
-                error_string = Message(i18n_catalog.i18nc("@info:status", "Repetier is busy. Unable to start a new job."))
+                error_string = i18n_catalog.i18nc("@info:status", "Repetier is busy. Unable to start a new job.")
 
             if error_string:
                 if self._error_message:

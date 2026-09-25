@@ -35,5 +35,7 @@ How to use
 - Click Get Printers button, it should populate the dropdown to select your repetier printer.
 - Click OK this will show the printer in the Printers list again but then ask for your Repetier API key.  Once that is filled you can check the extra options if you have a webcam and need to rotate it.
 - Once the API key is accepted, the "Connect" button becomes available — click it to link this Repetier instance to the current Cura printer (the linked instance is shown in bold in the list).
+- To change the API key later (for example after moving your printers to a new Repetier server), select the same instance, use Edit to correct the address if it changed, enter the new key, and click "Save" once it validates. There is no need to delete and recreate the connection. Each Cura printer profile keeps its own API key.
+- Instance names must be unique — they are how the plugin identifies a printer. The dialog will refuse a name that is already in use.
 - If you do not want to print immediately but have your print job stored uncheck "Automatically start print job after uploading"
 - From this point on, the print monitor should be functional and you should be able to switch to "Print to Repetier" on the bottom of the sidebar.

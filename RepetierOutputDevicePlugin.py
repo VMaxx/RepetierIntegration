@@ -170,6 +170,13 @@ class RepetierOutputDevicePlugin(OutputDevicePlugin):
 
     ##  Because the model needs to be created in the same thread as the QMLEngine, we use a signal.
     def addInstance(self, name: str, address: str, port: int, properties: Dict[bytes, bytes]) -> None:
+        # The instance name is the plugin's identity for a printer, so silently overwriting an
+        # existing entry would steal the link (and API key) of whichever machine points at it.
+        # Callers that mean to replace an instance call removeInstance()/removeManualInstance() first.
+        if name in self._instances:
+            Logger.log("w", "Ignoring Repetier instance '%s' at %s:%d: an instance with that name already exists.", name, address, port)
+            return
+
         instance = RepetierOutputDevice(name, address, port, properties)
         self._instances[instance.getId()] = instance
         global_container_stack = Application.getInstance().getGlobalContainerStack()

@@ -1,5 +1,43 @@
 # Changelog
 
+### v5.3 - API key changes and instance name collisions (Mick Mifsud)
+
+- **Changing an API key required deleting and recreating the connection.** The "Connect" button
+  disabled itself for the instance already linked to the active machine, and it is the only
+  caller of `setApiKey()`. Once linked there was no way to persist a new key — the field would
+  accept it and validate it green, then discard it. This bit when moving printers to a new
+  Repetier server, where the key changes but everything else stays the same. The button now
+  stays enabled whenever a key validates, and reads "Save" for the already-linked instance.
+  (This reverses the v5.2 "Connect is disabled while viewing the already-linked instance"
+  behaviour, which turned out to trade one setup dead-end for another.)
+- **Duplicate instance names silently hijacked each other.** The instance name is the plugin's
+  identity for a printer (`RepetierOutputDevice.getId()`), so adding a second instance under an
+  existing name overwrote the first in `_instances` and in the `Repetier/manual_instances`
+  preference, leaving two machines pointing at one device with whichever API key was written
+  last. Most likely when the same printer names exist on two servers. The manual-instance
+  dialog now shows a warning and disables "Ok" for a name already in use, `setManualInstance()`
+  refuses the write server-side, and `addInstance()` logs and bails rather than replacing an
+  existing entry.
+- **Renaming a manual instance orphaned every machine linked to it**, because the machine's
+  `repetier_instance_id` still pointed at the old name. `setManualInstance()` now takes the old
+  name and rewrites the link on any affected machine stack before reconnecting.
+
+- **Sending a print to a busy or offline printer crashed with `'Message' object has no attribute
+  'replace'`** instead of showing why. `startPrint()` assigned `error_string = Message(...)` and
+  then passed that `Message` as the *text* of another `Message`, whose constructor calls
+  `text.replace()`. The traceback replaced the real notice ("The printer is offline. Unable to
+  start a new job.") and its "Queue job" button. Present since v4.6.
+
+### Removed
+
+- `Repetier/keys_cache` and `getApiKey()`. The cache was written keyed by the Repetier printer
+  *slug* but read back keyed by the *instance name*, so a lookup could never hit; `getApiKey()`
+  had no caller (its QML call site was commented out). Slugs also repeat across servers, so
+  entries collided. API keys live per machine profile in the `repetier_api_key` metadata entry,
+  which is what every code path actually reads. An existing `keys_cache` value is left alone in
+  the preferences file rather than deleted - nothing reads it any more, and removing it on
+  upgrade would be the one destructive step in an otherwise additive change.
+
 ### v5.2 - connection setup bugfixes (Mick Mifsud)
 
 - **Flaky first-time connection setup.** `RepetierOutputDevicePlugin` decided whether to push

@@ -96,16 +96,10 @@ class DiscoverRepetierAction(MachineAction):
         self._instance_webcamrot90 = False
         self._instance_webcamrot270 = False
 
-        # Load keys cache from preferences
-        self._preferences = self._application.getPreferences()
-        self._preferences.addPreference("Repetier/keys_cache", "")
-
-        try:
-            self._keys_cache = json.loads(self._preferences.getValue("Repetier/keys_cache"))
-        except ValueError:
-            self._keys_cache = {}
-        if not isinstance(self._keys_cache, dict):
-            self._keys_cache = {}
+        # Note: an obsolete "Repetier/keys_cache" value may still be present in the
+        # preferences file. Nothing reads or writes it any more - API keys live per
+        # machine in the "repetier_api_key" metadata entry - so it is left alone
+        # rather than deleted.
 
         self._additional_components = None
 
@@ -142,14 +136,51 @@ class DiscoverRepetierAction(MachineAction):
 
         self._network_plugin.removeManualInstance(name)
 
-    @pyqtSlot(str, str, int, str, bool, str, str,str)
-    def setManualInstance(self, name, address, port, path, useHttps, userName, password,repetierid):
+    ##  Whether `name` is already taken by an instance other than `old_name`.
+    #   Instance names are the plugin's identity for a printer (see RepetierOutputDevice.getId()),
+    #   so two instances sharing a name silently overwrite each other.
+    @pyqtSlot(str, str, result = bool)
+    def instanceNameTaken(self, name: str, old_name: str) -> bool:
+        if not self._network_plugin:
+            return False
+
+        name = name.strip()
+        if name == "" or name == old_name:
+            return False
+
+        return name in self._network_plugin.getInstances()
+
+    @pyqtSlot(str, str, str, int, str, bool, str, str, str)
+    def setManualInstance(self, old_name, name, address, port, path, useHttps, userName, password, repetierid):
         if not self._network_plugin:
             return
+
+        name = name.strip()
+        if self.instanceNameTaken(name, old_name):
+            Logger.log("w", "Refusing to add manual instance %s: that name is already in use by another instance.", name)
+            return
+
+        if old_name and old_name != name:
+            self._network_plugin.removeManualInstance(old_name)
+
         # This manual printer could replace a current manual printer
         self._network_plugin.removeManualInstance(name)
-        
+
         self._network_plugin.addManualInstance(name, address, port, path, useHttps, userName, password, repetierid)
+
+        if old_name and old_name != name:
+            self._relinkMachines(old_name, name)
+
+    ##  Point any machine linked to the instance `old_name` at `new_name` instead, so renaming
+    #   a manual instance does not silently orphan the machines connected to it.
+    def _relinkMachines(self, old_name: str, new_name: str) -> None:
+        for stack in ContainerRegistry.getInstance().findContainerStacks(type = "machine"):
+            if stack.getMetaDataEntry("repetier_instance_id", "") == old_name:
+                stack.setMetaDataEntry("repetier_instance_id", new_name)
+                Logger.log("d", "Relinked machine %s from instance %s to %s", stack.getId(), old_name, new_name)
+
+        if self._network_plugin:
+            self._network_plugin.reCheckConnections()
 
     def _onContainerAdded(self, container: "ContainerInterface") -> None:
         # Add this action as a supported action to all machine definitions
@@ -326,27 +357,10 @@ class DiscoverRepetierAction(MachineAction):
         if not global_container_stack:
             return
         global_container_stack.setMetaDataEntry("repetier_api_key", api_key)
-        self._keys_cache[self.getInstanceId()] = api_key
-        keys_cache = base64.b64encode(json.dumps(self._keys_cache).encode("ascii")).decode("ascii")
-        self._preferences.setValue("Repetier/keys_cache", keys_cache)
 
         if self._network_plugin:
             # Ensure that the connection states are refreshed.
             self._network_plugin.reCheckConnections()
-
-    #  Get the stored API key of this machine
-    #   \return key String containing the key of the machine.
-    @pyqtSlot(str, result=str)
-    def getApiKey(self, instance_id: str) -> str:
-        global_container_stack = self._application.getGlobalContainerStack()
-        if not global_container_stack:
-            return ""
-        Logger.log("d", "APIKEY read %s" % global_container_stack.getMetaDataEntry("repetier_api_key",""))
-        if instance_id == self.getInstanceId():
-            api_key = global_container_stack.getMetaDataEntry("repetier_api_key","")
-        else:
-            api_key = self._keys_cache.get(instance_id, "")
-        return api_key
 
     selectedInstanceSettingsChanged = pyqtSignal()
     printersChanged = pyqtSignal()
@@ -536,9 +550,6 @@ class DiscoverRepetierAction(MachineAction):
                         if not global_container_stack:
                             return
                         global_container_stack.setMetaDataEntry("repetier_api_key", json_data["apikey"])
-                        self._keys_cache[self.getInstanceId()] = json_data["apikey"]
-                        keys_cache = base64.b64encode(json.dumps(self._keys_cache).encode("ascii")).decode("ascii")
-                        self._preferences.setValue("Repetier/keys_cache", keys_cache)
                         self.appKeyReceived.emit()
             if "listModelGroups" in reply.url().toString():  # Repetier settings dump from listModelGroups:            
                 if http_status_code == 200:
